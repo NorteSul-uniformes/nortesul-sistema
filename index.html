@@ -380,8 +380,10 @@ function iniciarSistema(){
 function montarAdmin(tabs, content){
   tabs.innerHTML = `
     <button class="tab active" onclick="irAdmin('dashboard',this)">Painel</button>
+    <button class="tab" onclick="irAdmin('cadastro',this)">Cadastro</button>
     <button class="tab" onclick="irAdmin('nova-op',this)">Nova OP</button>
     <button class="tab" onclick="irAdmin('ops',this)">OPs</button>
+    <button class="tab" onclick="irAdmin('estoque',this)">Estoque</button>
     <button class="tab" onclick="irAdmin('personalizacoes',this)">Personalizacoes</button>
     <button class="tab" onclick="irAdmin('costureiras',this)">Costureiras</button>
     <button class="tab" onclick="irAdmin('receber',this)">A Receber</button>
@@ -390,7 +392,6 @@ function montarAdmin(tabs, content){
     <button class="tab" onclick="irAdmin('simples',this)">Simples</button>
     <button class="tab" onclick="irAdmin('usuarios',this)">Usuarios</button>
     <button class="tab" onclick="irAdmin('auditoria',this)">Auditoria</button>
-    <button class="tab" onclick="irAdmin('clientes',this)">Clientes</button>
   `;
   content.innerHTML = '<div id="page-admin-dashboard" class="page active">'+loading()+'</div>';
   carregarDashboardAdmin();
@@ -403,8 +404,10 @@ async function irAdmin(pag, btn){
   content.innerHTML = '<div class="page active">'+loading()+'</div>';
   
   if(pag==='dashboard') await carregarDashboardAdmin();
+  else if(pag==='cadastro') await carregarCadastro('clientes');
   else if(pag==='nova-op') renderNovaOP();
   else if(pag==='ops') await carregarOPs();
+  else if(pag==='estoque') await carregarEstoque();
   else if(pag==='costureiras') await carregarCostureiras();
   else if(pag==='receber') await carregarReceber();
   else if(pag==='fluxo') await carregarFluxo();
@@ -412,11 +415,133 @@ async function irAdmin(pag, btn){
   else if(pag==='simples') await carregarSimples();
   else if(pag==='usuarios') await carregarUsuarios();
   else if(pag==='auditoria') await carregarAuditoria();
-  else if(pag==='clientes') await carregarClientes();
   else if(pag==='personalizacoes') await carregarPersonalizacoes();
 }
 
 async function carregarDashboardAdmin(){
+  var hoje = new Date();
+  var diaHoje = hoje.getDate();
+  var mesHoje = hoje.getMonth()+1;
+
+  var [opsRes, cosRes, fcRes, cliRes, userRes] = await Promise.all([
+    supa.from('ops').select('*').order('criada_em',{ascending:false}),
+    supa.from('costura').select('*'),
+    supa.from('fluxo_caixa').select('valor,tipo,categoria'),
+    supa.from('clientes').select('nome,data_nascimento,categoria'),
+    supa.from('usuarios').select('nome,data_nascimento,nivel').eq('ativo',true)
+  ]);
+
+  var ops = opsRes.data||[];
+  var cos = cosRes.data||[];
+  var fc = fcRes.data||[];
+  var clientes = cliRes.data||[];
+  var usuarios = userRes.data||[];
+
+  var abertas = ops.filter(function(o){return o.etapa!=='Concluida';});
+  var pecasMes = abertas.reduce(function(s,o){return s+(o.total_pecas||0);},0);
+  var dueCos = cos.filter(function(l){return !l.pago;}).reduce(function(s,l){return s+(l.total||0);},0);
+
+  // Pecas por etapa (ops abertas)
+  var etapaCnt = {Corte:0,Personalizacao:0,Silk:0,Costura:0,Revisao:0};
+  var etapaPecas = {Corte:0,Personalizacao:0,Silk:0,Costura:0,Revisao:0};
+  abertas.forEach(function(o){
+    if(etapaCnt[o.etapa]!==undefined){etapaCnt[o.etapa]++;etapaPecas[o.etapa]+=(o.total_pecas||0);}
+  });
+
+  // Prontos aguardando retirada
+  var prontos = ops.filter(function(o){return o.etapa==='Concluida'&&!o.retirado;});
+
+  // Aniversariantes do dia
+  function ehAnivHoje(dt){
+    if(!dt)return false;
+    var d=new Date(dt+'T12:00:00');
+    return d.getDate()===diaHoje && (d.getMonth()+1)===mesHoje;
+  }
+  var anivClientes = clientes.filter(function(c){return ehAnivHoje(c.data_nascimento);});
+  var anivFunc = usuarios.filter(function(u){return ehAnivHoje(u.data_nascimento);});
+
+  // Alertas de prazo
+  var alertas='';
+  abertas.filter(function(o){return o.entrega;}).forEach(function(op){
+    var n=diasAte(op.entrega);
+    if(n<0)alertas+='<div class="alert alert-red">ATRASADO: <strong>'+op.num+' - '+op.cliente+'</strong> ('+Math.abs(n)+'d)</div>';
+    else if(n<=3)alertas+='<div class="alert alert-warn">ENTREGA EM '+n+'d: <strong>'+op.num+' - '+op.cliente+'</strong></div>';
+  });
+
+  // Cards de etapa
+  function etapaCard(label, icon, etapa, cor){
+    var cnt=etapaCnt[etapa]||0, pcs=etapaPecas[etapa]||0;
+    return '<div style="background:#fff;border:1px solid var(--border);border-radius:var(--rsm);padding:10px 12px;flex:1;min-width:130px">'+
+      '<div style="font-size:18px;margin-bottom:4px">'+icon+'</div>'+
+      '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em">'+label+'</div>'+
+      '<div style="font-size:22px;font-weight:800;color:'+cor+'">'+pcs+'</div>'+
+      '<div style="font-size:11px;color:var(--muted)">pecas em '+cnt+' OP(s)</div>'+
+    '</div>';
+  }
+
+  // Tabela prontos
+  var prontosHtml = prontos.length ?
+    prontos.map(function(op){
+      return '<tr><td><strong>'+op.num+'</strong></td><td>'+op.cliente+'</td><td>'+(op.total_pecas||0)+' pcs</td>'+
+        '<td>'+dtBR(op.entrega)+'</td>'+
+        '<td><button class="btn btn-sm btn-g" onclick="marcarRetirado(\'' +op.num+ '\')">Retirado</button></td></tr>';
+    }).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">Nenhum trabalho aguardando retirada.</td></tr>';
+
+  // Aniversariantes
+  var anivHtml = '';
+  if(anivClientes.length||anivFunc.length){
+    anivHtml = '<div class="card" style="border:2px solid #e8d882;background:#fffef0;margin-bottom:10px"><div class="ct">Aniversariantes de Hoje</div>';
+    anivClientes.forEach(function(c){anivHtml+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="font-size:18px">Cliente</span><strong>'+c.nome+'</strong><span class="badge b-warn">'+(c.categoria||'')+'</span></div>';});
+    anivFunc.forEach(function(u){anivHtml+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="font-size:18px">Funcionario</span><strong>'+u.nome+'</strong><span class="badge b-ok">'+u.nivel+'</span></div>';});
+    anivHtml += '</div>';
+  }
+
+  document.getElementById('main-content').innerHTML =
+    alertas +
+    anivHtml +
+    '<div class="metrics">'+
+      '<div class="mc"><div class="mc-lbl">OPs em aberto</div><div class="mc-val">'+abertas.length+'</div></div>'+
+      '<div class="mc"><div class="mc-lbl">Pecas em producao</div><div class="mc-val">'+pecasMes+'</div></div>'+
+      '<div class="mc"><div class="mc-lbl">A pagar costureiras</div><div class="mc-val" style="color:var(--red)">'+Rc(dueCos)+'</div></div>'+
+      '<div class="mc"><div class="mc-lbl">Prontos p/ retirada</div><div class="mc-val" style="color:var(--green)">'+prontos.length+'</div></div>'+
+    '</div>'+
+    '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Producao por etapa</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'+
+      etapaCard('Corte','X','Corte','#1a4a8a')+
+      etapaCard('Personalizacao','A','Personalizacao','#8a5a00')+
+      etapaCard('Silk-screen','S','Silk','#6b3fa0')+
+      etapaCard('Costura','C','Costura','#1a4a1f')+
+      etapaCard('Revisao','R','Revisao','#5a5a5a')+
+    '</div>'+
+    '<div class="g2">'+
+      '<div class="card" style="padding:0">'+
+        '<div style="padding:8px 12px;background:#1a4a1f;color:#fff;border-radius:var(--rsm) var(--rsm) 0 0;font-size:12px;font-weight:700">Prontos aguardando retirada</div>'+
+        '<div class="tw"><table>'+
+          '<thead><tr><th>OP</th><th>Cliente</th><th>Qtd</th><th>Prazo</th><th></th></tr></thead>'+
+          '<tbody>'+prontosHtml+'</tbody>'+
+        '</table></div>'+
+      '</div>'+
+      '<div>'+
+        '<div class="card">'+
+          '<div class="ct">OPs recentes</div>'+
+          '<div class="tw"><table>'+
+            '<thead><tr><th>OP</th><th>Cliente</th><th>Etapa</th><th></th></tr></thead>'+
+            '<tbody>'+
+              ops.slice(0,6).map(function(op){
+                var etCls={Corte:'b-blue',Personalizacao:'b-warn',Costura:'b-navy',Revisao:'b-gray',Concluida:'b-ok'};
+                return '<tr><td><strong>'+op.num+'</strong></td><td>'+op.cliente+'</td>'+
+                  '<td><span class="badge '+(etCls[op.etapa]||'b-gray')+'">'+op.etapa+'</span></td>'+
+                  '<td><button class="btn btn-sm btn-s" onclick="verOP(\"'+op.num+'\")">Ver</button></td></tr>';
+              }).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px">Nenhuma OP.</td></tr>'+
+          '</tbody></table></div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+}
+
+// ORIGINAL (apagada, substituida acima)
+async function _carregarDashboardAdminLEGACY(){
   var [opsRes, fcRes, cosRes] = await Promise.all([
     supa.from('ops').select('*').order('criada_em',{ascending:false}),
     supa.from('fluxo_caixa').select('*'),
@@ -480,6 +605,358 @@ async function carregarDashboardAdmin(){
         </div>
       </div>
     </div>`;
+}
+
+// ══════════════════════════════════════════
+// MARCAR RETIRADO
+// ══════════════════════════════════════════
+async function marcarRetirado(num){
+  if(!confirm('Confirmar retirada da '+num+'?'))return;
+  await supa.from('ops').update({retirado:true,data_retirada:new Date().toISOString()}).eq('num',num);
+  await registrarAuditoria('RETIRADA','ops',num,{por:U.nome});
+  await carregarDashboardAdmin();
+}
+
+// ══════════════════════════════════════════
+// CADASTRO (Clientes, Produtos, Funcionarios)
+// ══════════════════════════════════════════
+async function carregarCadastro(sub){
+  sub = sub||'clientes';
+  var btns = ['clientes','produtos','funcionarios'].map(function(s){
+    return '<button class="btn btn-sm '+(s===sub?'btn-p':'btn-s')+'" onclick="carregarCadastro(this.dataset.sub)" data-sub="'+s+'">'+s.charAt(0).toUpperCase()+s.slice(1)+'</button>';
+  }).join(' ');
+
+  if(sub==='clientes') await _cadClientes(btns);
+  else if(sub==='produtos') await _cadProdutos(btns);
+  else if(sub==='funcionarios') await _cadFuncionarios(btns);
+}
+
+async function _cadClientes(btns){
+  var {data:cli} = await supa.from('clientes').select('*').order('nome');
+  cli = cli||[];
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:15px;font-weight:800;color:var(--navy)">Cadastro</span>
+      ${btns}
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="ct">Novo cliente</div>
+        <div class="fg">
+          <div class="fl"><span class="lbl">Nome / Razao social *</span><input type="text" id="cc-nome" placeholder="Nome completo ou razao social"></div>
+          <div class="fl"><span class="lbl">Data de nascimento</span><input type="date" id="cc-nasc"></div>
+          <div class="fl"><span class="lbl">CPF / CNPJ</span><input type="text" id="cc-doc" placeholder="000.000.000-00"></div>
+          <div class="fl"><span class="lbl">Telefone</span><input type="text" id="cc-tel" placeholder="(94) 9xxxx-xxxx"></div>
+          <div class="fl"><span class="lbl">Inscricao estadual</span><input type="text" id="cc-ie"></div>
+          <div class="fl"><span class="lbl">Inscricao municipal</span><input type="text" id="cc-im"></div>
+          <div class="fl" style="grid-column:1/-1"><span class="lbl">Endereco</span><input type="text" id="cc-end" placeholder="Rua, numero, bairro, cidade"></div>
+          <div class="fl"><span class="lbl">Categoria</span>
+            <select id="cc-cat">
+              <option value="empresarial">Empresarial</option>
+              <option value="escolar">Escolar</option>
+              <option value="eventual">Eventual</option>
+              <option value="outros">Outros</option>
+            </select>
+          </div>
+          <div class="fl"><span class="lbl">Email</span><input type="email" id="cc-email" placeholder="email@empresa.com"></div>
+        </div>
+        <div class="frow"><button class="btn btn-p btn-sm" onclick="salvarCliente2()">Cadastrar</button></div>
+      </div>
+      <div class="card" style="padding:0">
+        <div style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--navy);border-bottom:1px solid var(--border)">Clientes cadastrados (${cli.length})</div>
+        <div class="tw"><table>
+          <thead><tr><th>Nome</th><th>Categoria</th><th>Telefone</th><th>Aniversario</th></tr></thead>
+          <tbody>${cli.map(function(c){
+            var ehHoje=false;
+            if(c.data_nascimento){var d=new Date(c.data_nascimento+'T12:00:00'),h=new Date();ehHoje=d.getDate()===h.getDate()&&(d.getMonth()+1)===(h.getMonth()+1);}
+            return '<tr'+(ehHoje?' style="background:#fffef0"':'')+'>'+
+              '<td><strong>'+c.nome+'</strong>'+(ehHoje?' <span style="font-size:14px">Aniversario hoje!</span>':'')+
+              (c.documento?'<br><span style="font-size:10px;color:var(--muted)">'+c.documento+'</span>':'')+
+              '</td><td><span class="badge b-gray">'+(c.categoria||'--')+'</span></td>'+
+              '<td>'+(c.telefone||'--')+'</td>'+
+              '<td>'+(c.data_nascimento?dtBR(c.data_nascimento.substring(5)+'-'+c.data_nascimento.substring(0,4)):'--')+'</td></tr>';
+          }).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:14px">Nenhum cliente.</td></tr>'}
+        </tbody></table></div>
+      </div>
+    </div>`;
+}
+
+async function salvarCliente2(){
+  var nome=document.getElementById('cc-nome').value.trim();
+  if(!nome){alert('Informe o nome.');return;}
+  var {error}=await supa.from('clientes').insert({
+    nome:nome,
+    data_nascimento:document.getElementById('cc-nasc').value||null,
+    documento:document.getElementById('cc-doc').value,
+    telefone:document.getElementById('cc-tel').value,
+    inscricao_estadual:document.getElementById('cc-ie').value,
+    inscricao_municipal:document.getElementById('cc-im').value,
+    endereco:document.getElementById('cc-end').value,
+    categoria:document.getElementById('cc-cat').value,
+    email:document.getElementById('cc-email').value
+  });
+  if(error){alert('Erro: '+error.message);return;}
+  await registrarAuditoria('CRIOU_CLIENTE','clientes',null,{nome:nome});
+  alert('Cliente cadastrado!');
+  await carregarCadastro('clientes');
+}
+
+async function _cadProdutos(btns){
+  var {data:prods} = await supa.from('produtos').select('*').order('nome');
+  prods = prods||[];
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:15px;font-weight:800;color:var(--navy)">Cadastro</span>
+      ${btns}
+    </div>
+    <div class="card">
+      <div class="ct">Novo produto</div>
+      <div class="fg">
+        <div class="fl"><span class="lbl">Nome do produto * (max 50)</span><input type="text" id="cp-nome" maxlength="50" placeholder="Ex: Camiseta basica branca GG+"></div>
+        <div class="fl"><span class="lbl">Valor unitario praticado R$</span><input type="number" id="cp-venda" step="0.01" min="0" placeholder="0,00" oninput="recalcProd()"></div>
+        <div class="fl" style="grid-column:1/-1"><span class="lbl">Descricao (max 200)</span><textarea id="cp-desc" maxlength="200" rows="2" placeholder="Insumos utilizados, dicas de uso..."></textarea></div>
+      </div>
+      <div class="ct" style="margin-top:10px">Ficha de custos diretos</div>
+      <div class="alert alert-info" style="margin-bottom:10px;font-size:11px">Preencha os custos por peca. O sistema usa para baixa automatica no estoque e calculo da margem.</div>
+      <div class="fg">
+        <div class="fl"><span class="lbl">① Tecido (R$/peca)</span><input type="number" id="cp-tecido" step="0.01" min="0" placeholder="0,00" oninput="recalcProd()"></div>
+        <div class="fl"><span class="lbl">② Insumos MP (R$/peca)</span><input type="number" id="cp-insumos" step="0.01" min="0" placeholder="0,00" oninput="recalcProd()"></div>
+        <div class="fl"><span class="lbl">③ Faccionista (R$/peca)</span><input type="number" id="cp-facc" step="0.01" min="0" placeholder="0,00" oninput="recalcProd()"></div>
+        <div class="fl"><span class="lbl">④ Estampa/DTF (R$/peca)</span><input type="number" id="cp-estampa" step="0.01" min="0" placeholder="0,00" oninput="recalcProd()"></div>
+        <div class="fl"><span class="lbl">⑤ Frete MP (R$/peca)</span><input type="number" id="cp-frete" step="0.01" min="0" value="1.50" oninput="recalcProd()"></div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--rsm);padding:10px;margin-top:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase">Resultado da precificacao</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+          <div><span class="lbl">Custo direto</span><div style="font-size:16px;font-weight:800;color:var(--red)" id="pp-cd">R$ 0,00</div></div>
+          <div><span class="lbl">Preco praticado</span><div style="font-size:16px;font-weight:800" id="pp-venda">R$ 0,00</div></div>
+          <div><span class="lbl">Margem contrib. R$</span><div style="font-size:16px;font-weight:800;color:var(--green)" id="pp-mc">R$ 0,00</div></div>
+          <div><span class="lbl">Indice MC %</span><div style="font-size:16px;font-weight:800" id="pp-imc">0%</div></div>
+          <div><span class="lbl">Preco minimo (CD/0,585)</span><div style="font-size:16px;font-weight:800;color:var(--warn)" id="pp-min">R$ 0,00</div></div>
+          <div><span class="lbl">Folga</span><div style="font-size:16px;font-weight:800" id="pp-folga">R$ 0,00</div></div>
+          <div><span class="lbl">Status</span><div style="font-size:16px;font-weight:800" id="pp-status">--</div></div>
+        </div>
+      </div>
+      <div class="ct" style="margin-top:12px">Composicao de insumos para baixa no estoque</div>
+      <div class="alert alert-info" style="margin-bottom:8px;font-size:11px">Cadastre aqui quanto de cada material e usado por peca. Quando uma OP for criada com esse produto, o estoque sera baixado automaticamente.</div>
+      <div id="insumos-list"></div>
+      <button class="btn btn-s btn-sm" onclick="addInsumoLinha()" style="margin-top:6px">+ Adicionar insumo</button>
+      <div class="frow" style="margin-top:14px">
+        <button class="btn btn-a" onclick="salvarProduto()">Salvar produto</button>
+      </div>
+    </div>
+    <div class="card" style="padding:0;margin-top:10px">
+      <div style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--navy);border-bottom:1px solid var(--border)">Produtos cadastrados (${prods.length})</div>
+      <div class="tw"><table>
+        <thead><tr><th>Produto</th><th>Custo direto</th><th>Preco</th><th>Margem</th><th>Status</th></tr></thead>
+        <tbody>${prods.map(function(p){
+          var cd=(p.custo_tecido||0)+(p.custo_insumos||0)+(p.custo_facc||0)+(p.custo_estampa||0)+(p.custo_frete||0);
+          var mc=(p.valor_venda||0)-cd;
+          var imc=p.valor_venda>0?mc/p.valor_venda:0;
+          var min=cd/0.585;
+          var ok=(p.valor_venda||0)>=min;
+          return '<tr><td><strong>'+p.nome+'</strong><br><span style="font-size:10px;color:var(--muted)">'+(p.descricao||'')+'</span></td>'+
+            '<td>'+R(cd)+'</td><td>'+R(p.valor_venda||0)+'</td>'+
+            '<td style="color:'+(mc>=0?'var(--green)':'var(--red)')+'"><strong>'+R(mc)+'</strong><br><span style="font-size:10px">'+(imc*100).toFixed(1)+'%</span></td>'+
+            '<td><span class="badge '+(ok?'b-ok':'b-red')+'">'+(ok?'OK':'ABAIXO DO MIN')+'</span></td></tr>';
+        }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">Nenhum produto.</td></tr>'}
+        </tbody></table></div>
+    </div>`;
+  addInsumoLinha();
+}
+
+var insumoCount=0;
+function addInsumoLinha(){
+  insumoCount++;
+  var i=insumoCount;
+  var div=document.createElement('div');
+  div.id='insumo-row-'+i;
+  div.className='insumo-row';
+  div.style.cssText='display:flex;gap:6px;align-items:flex-end;margin-bottom:6px';
+  var mat=document.createElement('div');mat.className='fl';mat.style.flex='2';
+  mat.innerHTML='<span class="lbl">Material</span><input type="text" id="ins-mat-'+i+'" placeholder="Ex: Malha PP, Etiqueta...">';
+  var qtd=document.createElement('div');qtd.className='fl';qtd.style.flex='1';
+  qtd.innerHTML='<span class="lbl">Qtd/peca</span><input type="number" id="ins-qtd-'+i+'" step="0.001" min="0" placeholder="0">';
+  var un=document.createElement('div');un.className='fl';un.style.flex='1';
+  un.innerHTML='<span class="lbl">Unidade</span><select id="ins-un-'+i+'"><option>kg</option><option>g</option><option>m</option><option>cm</option><option>un</option></select>';
+  var cu=document.createElement('div');cu.className='fl';cu.style.flex='1';
+  cu.innerHTML='<span class="lbl">Custo unit</span><input type="number" id="ins-cu-'+i+'" step="0.01" min="0" placeholder="0,00">';
+  var btn=document.createElement('button');btn.className='btn btn-sm btn-r';
+  btn.textContent='X';btn.style.cssText='margin-bottom:0;padding:6px 8px';
+  btn.onclick=function(){div.remove();};
+  div.appendChild(mat);div.appendChild(qtd);div.appendChild(un);div.appendChild(cu);div.appendChild(btn);
+  document.getElementById('insumos-list').appendChild(div);
+}
+
+function recalcProd(){
+  var cd=(parseFloat(document.getElementById('cp-tecido').value)||0)+
+         (parseFloat(document.getElementById('cp-insumos').value)||0)+
+         (parseFloat(document.getElementById('cp-facc').value)||0)+
+         (parseFloat(document.getElementById('cp-estampa').value)||0)+
+         (parseFloat(document.getElementById('cp-frete').value)||0);
+  var venda=parseFloat(document.getElementById('cp-venda').value)||0;
+  var mc=venda-cd;
+  var imc=venda>0?mc/venda:0;
+  var min=cd>0?cd/0.585:0;
+  var folga=venda-min;
+  var ok=venda>=min&&venda>0;
+  var ppcd=document.getElementById('pp-cd');if(ppcd)ppcd.textContent=R(cd);
+  var ppv=document.getElementById('pp-venda');if(ppv)ppv.textContent=R(venda);
+  var ppmc=document.getElementById('pp-mc');if(ppmc){ppmc.textContent=R(mc);ppmc.style.color=mc>=0?'var(--green)':'var(--red)';}
+  var ppimc=document.getElementById('pp-imc');if(ppimc){ppimc.textContent=(imc*100).toFixed(1)+'%';ppimc.style.color=imc>=0.35?'var(--green)':'var(--red)';}
+  var ppmin=document.getElementById('pp-min');if(ppmin)ppmin.textContent=R(min);
+  var ppf=document.getElementById('pp-folga');if(ppf){ppf.textContent=R(folga);ppf.style.color=folga>=0?'var(--green)':'var(--red)';}
+  var pps=document.getElementById('pp-status');if(pps){pps.textContent=ok?'OK':'ABAIXO DO MINIMO';pps.style.color=ok?'var(--green)':'var(--red)';}
+}
+
+async function salvarProduto(){
+  var nome=document.getElementById('cp-nome').value.trim();
+  if(!nome){alert('Informe o nome do produto.');return;}
+  var insumos=[];
+  document.querySelectorAll('[id^="insumo-row-"]').forEach(function(row){
+    var i=row.id.replace('insumo-row-','');
+    var mat=(document.getElementById('ins-mat-'+i)||{}).value||'';
+    var qtd=parseFloat((document.getElementById('ins-qtd-'+i)||{}).value)||0;
+    var un=(document.getElementById('ins-un-'+i)||{}).value||'un';
+    var cu=parseFloat((document.getElementById('ins-cu-'+i)||{}).value)||0;
+    if(mat&&qtd)insumos.push({material:mat,qtd_peca:qtd,unidade:un,custo_unit:cu});
+  });
+  var {error}=await supa.from('produtos').insert({
+    nome:nome,
+    descricao:document.getElementById('cp-desc').value,
+    valor_venda:parseFloat(document.getElementById('cp-venda').value)||0,
+    custo_tecido:parseFloat(document.getElementById('cp-tecido').value)||0,
+    custo_insumos:parseFloat(document.getElementById('cp-insumos').value)||0,
+    custo_facc:parseFloat(document.getElementById('cp-facc').value)||0,
+    custo_estampa:parseFloat(document.getElementById('cp-estampa').value)||0,
+    custo_frete:parseFloat(document.getElementById('cp-frete').value)||0,
+    insumos:insumos
+  });
+  if(error){alert('Erro: '+error.message);return;}
+  await registrarAuditoria('CRIOU_PRODUTO','produtos',null,{nome:nome});
+  alert('Produto salvo!');
+  await carregarCadastro('produtos');
+}
+
+async function _cadFuncionarios(btns){
+  var {data:users} = await supa.from('usuarios').select('*').order('nome');
+  users=users||[];
+  document.getElementById('main-content').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:15px;font-weight:800;color:var(--navy)">Cadastro</span>
+      ${btns}
+    </div>
+    <div class="card">
+      <div class="ct">Adicionar funcionario / usuario</div>
+      <div class="fg">
+        <div class="fl"><span class="lbl">Nome *</span><input type="text" id="fu-nome" placeholder="Nome completo"></div>
+        <div class="fl"><span class="lbl">Data de nascimento</span><input type="date" id="fu-nasc"></div>
+        <div class="fl"><span class="lbl">Email (login)</span><input type="email" id="fu-email" placeholder="email@nortesul.com"></div>
+        <div class="fl"><span class="lbl">Nivel de acesso</span><select id="fu-nivel"><option value="supervisor">Supervisor</option><option value="operacional">Operacional</option><option value="admin">Admin</option></select></div>
+        <div class="fl"><span class="lbl">Setor</span><input type="text" id="fu-setor" placeholder="Ex: corte, vendas, artes"></div>
+      </div>
+      <div class="alert alert-info" style="margin-bottom:8px">Senha inicial: <strong>123</strong></div>
+      <div class="frow"><button class="btn btn-p btn-sm" onclick="adicionarUsuario()">Adicionar</button></div>
+    </div>
+    <div class="card" style="padding:0;margin-top:10px">
+      <div style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--navy);border-bottom:1px solid var(--border)">Equipe</div>
+      <div class="tw"><table>
+        <thead><tr><th>Nome</th><th>Email</th><th>Nivel</th><th>Setor</th><th>Aniversario</th><th></th></tr></thead>
+        <tbody>${users.map(function(u){
+          var ehHoje=false;
+          if(u.data_nascimento){var d=new Date(u.data_nascimento+'T12:00:00'),h=new Date();ehHoje=d.getDate()===h.getDate()&&(d.getMonth()+1)===(h.getMonth()+1);}
+          var nivelCls={admin:'b-navy',supervisor:'b-blue',operacional:'b-ok'};
+          return '<tr'+(ehHoje?' style="background:#fffef0"':'')+'>'+
+            '<td><strong>'+u.nome+'</strong>'+(ehHoje?' Aniversario hoje!':'')+
+            '</td><td style="font-size:11px">'+u.email+'</td>'+
+            '<td><span class="badge '+(nivelCls[u.nivel]||'b-gray')+'">'+u.nivel+'</span></td>'+
+            '<td>'+(u.setor||'--')+'</td>'+
+            '<td>'+(u.data_nascimento?dtBR(u.data_nascimento):'--')+'</td>'+
+            '<td><button class="btn btn-sm btn-w" onclick="resetSenha(this.dataset.id,this.dataset.nome)" data-id="'+u.id+'" data-nome="'+u.nome+'">Reset</button></td></tr>';
+        }).join('')}
+        </tbody></table></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// ESTOQUE
+// ══════════════════════════════════════════
+async function carregarEstoque(){
+  var {data:estoque} = await supa.from('estoque').select('*').order('material');
+  estoque=estoque||[];
+  var {data:movs} = await supa.from('movimentacoes_estoque').select('*').order('criado_em',{ascending:false}).limit(30);
+  movs=movs||[];
+
+  var criticos=estoque.filter(function(e){return (e.saldo||0)<=(e.estoque_minimo||0);});
+
+  document.getElementById('main-content').innerHTML = `
+    <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:12px">Estoque de Materiais</div>
+    ${criticos.length?'<div class="alert alert-red">Estoque critico: <strong>'+criticos.map(function(e){return e.material;}).join(', ')+'</strong></div>':''}
+    <div class="g2">
+      <div class="card">
+        <div class="ct">Entrada de material</div>
+        <div class="fg">
+          <div class="fl"><span class="lbl">Material</span><input type="text" id="est-mat" placeholder="Ex: Malha PP Preta"></div>
+          <div class="fl"><span class="lbl">Quantidade</span><input type="number" id="est-qtd" step="0.001" min="0" placeholder="0"></div>
+          <div class="fl"><span class="lbl">Unidade</span><select id="est-un"><option>kg</option><option>g</option><option>m</option><option>un</option><option>m²</option><option>rolo</option></select></div>
+          <div class="fl"><span class="lbl">Custo total R$</span><input type="number" id="est-custo" step="0.01" min="0" placeholder="0,00"></div>
+          <div class="fl"><span class="lbl">Fornecedor</span><input type="text" id="est-forn" placeholder="Nome do fornecedor"></div>
+          <div class="fl"><span class="lbl">Estoque minimo (alerta)</span><input type="number" id="est-min" step="0.001" min="0" placeholder="0"></div>
+        </div>
+        <div class="frow"><button class="btn btn-p btn-sm" onclick="entradaEstoque()">Registrar entrada</button></div>
+      </div>
+      <div class="card" style="padding:0">
+        <div style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--navy);border-bottom:1px solid var(--border)">Saldo atual</div>
+        <div class="tw"><table>
+          <thead><tr><th>Material</th><th>Saldo</th><th>Un</th><th>Custo med.</th><th>Status</th></tr></thead>
+          <tbody>${estoque.map(function(e){
+            var critico=(e.saldo||0)<=(e.estoque_minimo||0);
+            return '<tr><td><strong>'+e.material+'</strong></td>'+
+              '<td style="font-weight:800;color:'+(critico?'var(--red)':'var(--green)')+'">'+(e.saldo||0).toFixed(3)+'</td>'+
+              '<td>'+(e.unidade||'--')+'</td>'+
+              '<td>'+R(e.custo_medio||0)+'</td>'+
+              '<td><span class="badge '+(critico?'b-red':'b-ok')+'">'+(critico?'CRITICO':'OK')+'</span></td></tr>';
+          }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:14px">Nenhum material.</td></tr>'}
+          </tbody></table></div>
+      </div>
+    </div>
+    <div class="card" style="padding:0;margin-top:10px">
+      <div style="padding:8px 12px;font-size:12px;font-weight:700;color:var(--navy);border-bottom:1px solid var(--border)">Ultimas movimentacoes</div>
+      <div class="tw"><table>
+        <thead><tr><th>Data</th><th>Tipo</th><th>Material</th><th>Qtd</th><th>OP</th><th>Por</th></tr></thead>
+        <tbody>${movs.map(function(m){
+          return '<tr><td>'+new Date(m.criado_em).toLocaleDateString('pt-BR')+'</td>'+
+            '<td><span class="badge '+(m.tipo==='entrada'?'b-ok':'b-red')+'">'+m.tipo+'</span></td>'+
+            '<td>'+m.material+'</td><td>'+(m.quantidade||0).toFixed(3)+' '+(m.unidade||'')+'</td>'+
+            '<td>'+(m.op_num||'--')+'</td><td style="font-size:11px">'+(m.criado_por||'--')+'</td></tr>';
+        }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:14px">Nenhuma movimentacao.</td></tr>'}
+        </tbody></table></div>
+    </div>`;
+}
+
+async function entradaEstoque(){
+  var mat=document.getElementById('est-mat').value.trim();
+  var qtd=parseFloat(document.getElementById('est-qtd').value)||0;
+  var un=document.getElementById('est-un').value;
+  var custo=parseFloat(document.getElementById('est-custo').value)||0;
+  var forn=document.getElementById('est-forn').value;
+  var min=parseFloat(document.getElementById('est-min').value)||0;
+  if(!mat||!qtd){alert('Informe material e quantidade.');return;}
+
+  // Verificar se ja existe
+  var {data:exist}=await supa.from('estoque').select('*').eq('material',mat).eq('unidade',un).maybeSingle();
+  if(exist){
+    var novoSaldo=(exist.saldo||0)+qtd;
+    var novoTot=(exist.custo_medio||0)*(exist.saldo||0)+custo;
+    var novoCustoMedio=novoSaldo>0?novoTot/novoSaldo:0;
+    await supa.from('estoque').update({saldo:novoSaldo,custo_medio:novoCustoMedio,estoque_minimo:min||exist.estoque_minimo}).eq('id',exist.id);
+  } else {
+    await supa.from('estoque').insert({material:mat,unidade:un,saldo:qtd,custo_medio:qtd>0?custo/qtd:0,estoque_minimo:min});
+  }
+  await supa.from('movimentacoes_estoque').insert({tipo:'entrada',material:mat,unidade:un,quantidade:qtd,custo_total:custo,fornecedor:forn,criado_por:U.nome});
+  await registrarAuditoria('ENTRADA_ESTOQUE','estoque',null,{material:mat,qtd:qtd,un:un});
+  alert('Entrada registrada!');
+  await carregarEstoque();
 }
 
 // ══════════════════════════════════════════
@@ -1298,13 +1775,14 @@ async function carregarPersonalizacoes(){
 function montarSupervisor(tabs, content){
   tabs.innerHTML = `
     <button class="tab active" onclick="irSup('dashboard',this)">Painel</button>
+    <button class="tab" onclick="irSup('cadastro',this)">Cadastro</button>
     <button class="tab" onclick="irSup('nova-op',this)">Nova OP</button>
     <button class="tab" onclick="irSup('ops',this)">OPs</button>
+    <button class="tab" onclick="irSup('estoque',this)">Estoque</button>
     <button class="tab" onclick="irSup('personalizacoes',this)">Personalizacoes</button>
     <button class="tab" onclick="irSup('costureiras',this)">Costureiras</button>
     <button class="tab" onclick="irSup('caixa',this)">Lancar no Caixa</button>
     <button class="tab" onclick="irSup('tarefas',this)">Tarefas Operacional</button>
-    <button class="tab" onclick="irSup('clientes',this)">Clientes</button>
   `;
   irSup('dashboard', tabs.querySelector('.tab'));
 }
@@ -1315,13 +1793,14 @@ async function irSup(pag, btn){
   var content = document.getElementById('main-content');
   content.innerHTML = '<div class="page active">'+loading()+'</div>';
   if(pag==='dashboard') await carregarDashboardAdmin();
+  else if(pag==='cadastro') await carregarCadastro('clientes');
   else if(pag==='nova-op') renderNovaOP();
   else if(pag==='ops') await carregarOPs();
+  else if(pag==='estoque') await carregarEstoque();
   else if(pag==='personalizacoes') await carregarPersonalizacoes();
   else if(pag==='costureiras') await carregarCostureiras();
   else if(pag==='caixa') await carregarFluxo();
   else if(pag==='tarefas') await carregarTarefasSup();
-  else if(pag==='clientes') await carregarClientes();
 }
 
 // ══════════════════════════════════════════
