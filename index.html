@@ -3,23 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Norte Sul Uniformes — Sistema</title>
+<title>NorteSul Uniformes e Confecções — Sistema</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#f0f4f8;min-height:100vh;font-size:13px}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f0f5f0;min-height:100vh;font-size:13px}
 :root{
-  --navy:#1a3a5c;--accent:#e8a020;
-  --green:#1a6b3a;--bg-green:#eaf4ee;
+  --navy:#1a4a1f;--accent:#e8d882;
+  --green:#2d7a35;--bg-green:#e8f5e9;
   --red:#b92c2c;--bg-red:#fceaea;
   --warn:#8a5a00;--bg-warn:#fff4db;
   --blue:#1a4a8a;--bg-blue:#e8f0fb;
-  --border:#e2e6ed;--surface:#fff;--surface2:#f4f6f9;
-  --muted:#8a909c;--radius:8px;--rsm:5px
+  --border:#d0dbd1;--surface:#fff;--surface2:#f2f7f2;
+  --muted:#6a7a6b;--radius:8px;--rsm:5px
 }
 
 /* LOGIN */
-.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f2440 0%,#1a3a5c 100%)}
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0d2910 0%,#1a4a1f 100%)}
 .login-box{background:#fff;border-radius:12px;padding:36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .login-logo{text-align:center;margin-bottom:24px}
 .login-logo-icon{width:56px;height:56px;background:var(--accent);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;color:var(--navy);margin-bottom:10px}
@@ -29,13 +29,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f4f8;min-heigh
 .login-label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
 .login-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--rsm);font-size:14px;outline:none;transition:border-color .15s}
 .login-input:focus{border-color:var(--navy)}
-.login-btn{width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:var(--rsm);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;transition:opacity .15s}
+.login-btn{width:100%;padding:12px;background:#1a4a1f;color:#fff;border:none;border-radius:var(--rsm);font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;transition:opacity .15s}
 .login-btn:hover{opacity:.9}
 .login-error{background:var(--bg-red);color:var(--red);padding:10px 12px;border-radius:var(--rsm);font-size:12px;margin-top:12px;display:none}
 .login-nivel{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;margin-top:12px;text-align:center;width:100%}
 
 /* TOPBAR */
-.topbar{background:var(--navy);padding:0 16px;display:flex;align-items:center;position:sticky;top:0;z-index:100;min-height:46px}
+.topbar{background:#1a4a1f;padding:0 16px;display:flex;align-items:center;position:sticky;top:0;z-index:100;min-height:46px}
 .brand{display:flex;align-items:center;gap:8px;padding:8px 16px 8px 0;border-right:1px solid rgba(255,255,255,.1);margin-right:12px;flex-shrink:0}
 .brand-logo{width:30px;height:30px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:var(--navy)}
 .brand-name{color:#fff;font-weight:700;font-size:13px}
@@ -47,7 +47,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f4f8;min-heigh
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;padding-left:10px}
 .user-badge{background:rgba(255,255,255,.12);color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600}
 .nivel-badge{padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700}
-.nb-admin{background:var(--accent);color:var(--navy)}
+.nb-admin{background:#e8d882;color:#1a4a1f}
 .nb-supervisor{background:#4a90d9;color:#fff}
 .nb-operacional{background:#5a9a6a;color:#fff}
 .logout-btn{background:rgba(255,255,255,.12);color:#fff;border:none;padding:5px 10px;border-radius:var(--rsm);font-size:11px;cursor:pointer}
@@ -168,7 +168,7 @@ input:focus,select:focus{border-color:var(--navy)}
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.fc-header{background:var(--navy);color:#fff;border-radius:var(--rsm);padding:12px 16px;margin-bottom:10px}
+.fc-header{background:#1a4a1f;color:#fff;border-radius:var(--rsm);padding:12px 16px;margin-bottom:10px}
 .dre-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
 .dre-row.total{font-weight:800;font-size:13px;border-top:2px solid var(--border);border-bottom:none;padding-top:8px}
 .dre-row.sub{padding-left:14px;color:var(--muted)}
@@ -187,8 +187,16 @@ input:focus,select:focus{border-color:var(--navy)}
   <div class="login-wrap">
     <div class="login-box">
       <div class="login-logo">
-        <div class="login-logo-icon">NS</div>
-        <div class="login-title">Norte Sul Uniformes</div>
+        <div style="display:flex;justify-content:center;margin-bottom:10px">
+          <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="32" cy="32" r="31" fill="#1a4a1f" stroke="#e8d882" stroke-width="3"/>
+            <ellipse cx="32" cy="32" rx="22" ry="22" fill="#2d7a35"/>
+            <path d="M14 32 Q22 18 32 22 Q42 26 50 32 Q42 46 32 42 Q22 38 14 32Z" fill="#1a4a1f" opacity="0.5"/>
+            <text x="32" y="39" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="20" fill="#e8d882" text-anchor="middle" letter-spacing="-1">NS</text>
+          </svg>
+        </div>
+        <div class="login-title">NorteSul</div>
+        <div style="font-size:14px;font-weight:700;color:#1a4a1f;margin-top:2px">Uniformes e Confecções</div>
         <div class="login-sub">Sistema de Gestao Empresarial</div>
       </div>
       <div class="login-field">
@@ -209,10 +217,15 @@ input:focus,select:focus{border-color:var(--navy)}
 <div id="sistema" style="display:none">
   <div class="topbar">
     <div class="brand">
-      <div class="brand-logo">NS</div>
+      <svg width="34" height="34" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+        <circle cx="32" cy="32" r="31" fill="#1a4a1f" stroke="#e8d882" stroke-width="3"/>
+        <ellipse cx="32" cy="32" rx="22" ry="22" fill="#2d7a35"/>
+        <path d="M14 32 Q22 18 32 22 Q42 26 50 32 Q42 46 32 42 Q22 38 14 32Z" fill="#1a4a1f" opacity="0.5"/>
+        <text x="32" y="39" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="20" fill="#e8d882" text-anchor="middle" letter-spacing="-1">NS</text>
+      </svg>
       <div>
-        <div class="brand-name">Norte Sul Uniformes</div>
-        <div class="brand-sub">Confeccao & Malharia</div>
+        <div class="brand-name">NorteSul</div>
+        <div class="brand-sub">Uniformes e Confecções</div>
       </div>
     </div>
     <div class="tabs" id="nav-tabs"></div>
