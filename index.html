@@ -85,8 +85,8 @@ tr:hover td{background:#fafbfc}
   <div class="alert ar" id="lerr" style="display:none;margin-top:10px"></div>
 </div></div>
 <div id="sys" style="display:none">
-  <div id="tb"><span class="brand">NorteSul<span id="relogio" style="font-size:9px;font-weight:400;opacity:.6;margin-left:8px;white-space:nowrap"></span></span><div id="nav"></div>
-  <div id="tbr"><span class="chip" id="nlbl"></span><button class="out" id="unome" onclick="minhaContaModal()" style="cursor:pointer" title="Minha conta / trocar senha"></button><button class="out" onclick="logout()">Sair</button></div></div>
+  <div id="tb"><span class="brand">NorteSul<span id="relo" style="font-size:9px;font-weight:400;opacity:.6;margin-left:8px;white-space:nowrap"></span></span><div id="nav"></div>
+  <div id="tbr"><span class="chip" id="nlbl"></span><button class="out" id="unome" onclick="minhaContaModal()" style="cursor:pointer" title="Minha conta"></button><button class="out" onclick="logout()">Sair</button></div></div>
   <div id="mc"></div>
 </div>
 <div id="modal"><div class="mbox"><button class="mclose" onclick="closeM()">&#x2715;</button><div id="mc2"></div></div></div>
@@ -132,12 +132,7 @@ const MENUS={
   supervisor:[['op','Nova OP'],['cad','Cadastro'],['est','Estoque'],['fin','Financeiro'],['exp','Expedição'],['tar','Tarefas'],['avs','Avisos']],
   operacional:[['tar','Tarefas']]
 };
-// Mapa etapa -> setor responsável
-const ETAPA_SETOR={
-  'Corte':'corte','Personalização':'personalizacao','Silk':'personalizacao',
-  'Costura':'costura','Revisão':'revisao','Expedição':'revisao'
-};
-// Fluxo de etapas possíveis
+const ETAPA_SETOR={'Corte':'corte','Personalização':'personalizacao','Silk':'personalizacao','Costura':'costura','Revisão':'revisao','Expedição':'revisao'};
 const ETAPAS=['Corte','Personalização','Silk','Costura','Revisão','Concluída'];
 
 function buildNav(){
@@ -155,17 +150,12 @@ function buildNav(){
   g('unome').textContent=U.nome+' ⚙';_tick();
 }
 
-function _tick(){
-  var n=new Date();
-  var el=document.getElementById('relogio');
-  if(el)el.textContent=n.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+n.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  setTimeout(_tick,10000);
-}
+function _tick(){var n=new Date(),el=g('relo');if(el)el.textContent=n.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+n.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});setTimeout(_tick,10000);}
 function go(p,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
   (btn||g('nav').querySelector(`[data-p="${p}"]`))?.classList.add('on');
   g('mc').innerHTML=ld();
-  var fn={op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,avs:pgAvs,usr:pgUsr,aud:pgAud}[p];(fn||pgOP)();
+  ({op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,usr:pgUsr}[p]||pgOP)();
 }
 
 // login/logout
@@ -222,17 +212,12 @@ async function pgOP(){
       <span>Produtos</span><button class="btn bs sm" id="btn-add-prod">+ Adicionar produto</button>
     </div>
     <div id="plist"></div>
-    <div class="sep">Tamanhos</div>
-    <div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">INFANTIL</div>
-    <div class="sg inf">${['1A','2-3A','4-5A','6-7A','8-9A','10-11A'].map(s=>`<div class="si"><div class="slbl">${s}</div><input class="sinp" type="number" min="0" value="0" data-sz="${s}" oninput="totPcs()"></div>`).join('')}</div>
-    <div style="font-size:10px;font-weight:700;color:var(--m);margin:6px 0 4px">ADULTO MASCULINO</div>
-    <div class="sg adu">${['PP','P','MP','M','G','GG','XGG','EX'].map(s=>`<div class="si"><div class="slbl">${s}</div><input class="sinp" type="number" min="0" value="0" data-sz="m${s}" oninput="totPcs()"></div>`).join('')}</div>
-    <div style="font-size:10px;font-weight:700;color:var(--m);margin:6px 0 4px">ADULTO FEMININO</div>
-    <div class="sg adu">${['PP','P','MP','M','G','GG','XGG','EX'].map(s=>`<div class="si"><div class="slbl">${s}</div><input class="sinp" type="number" min="0" value="0" data-sz="f${s}" oninput="totPcs()"></div>`).join('')}</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--b);margin-top:4px">
-      <span style="font-size:11px;font-weight:700;color:var(--m)">TOTAL</span>
-      <span style="font-size:22px;font-weight:900;color:var(--g)" id="otot">0</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--b);border-bottom:1px solid var(--b);margin:4px 0 10px">
+      <span style="font-size:12px;font-weight:700;color:var(--m)">TOTAL GERAL DE PEÇAS</span>
+      <span style="font-size:24px;font-weight:900;color:var(--g)" id="otot">0</span>
     </div>
+    <div class="sep">Observações gerais da OP</div>
+    <div class="row r1"><div class="f"><textarea id="oobs-geral" rows="2" placeholder="Observações gerais para toda a OP..."></textarea></div></div>
     <div class="sep">Faccionista</div>
     <div class="row r3">
       <div class="f"><label>Faccionista *</label>
@@ -300,41 +285,50 @@ async function pgOP(){
 
 function addProd(prods){
   _pc++;var i=_pc;
+  var pOpts=prods.map(function(p){return '<option value="'+p.id+'" data-n="'+p.nome+'" data-v="'+(p.valor_venda||0)+'">'+p.nome+'</option>';}).join('');
+  var szInf=['1A','2-3A','4-5A','6-7A','8-9A','10-11A'];
+  var szAdu=['PP','P','MP','M','G','GG','XGG','EX'];
   var div=document.createElement('div');div.className='pcard';div.id='pc'+i;
-  div.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <b style="font-size:12px;color:var(--g)">Produto ${i}</b></div>
-  <div class="row r3">
-    <div class="f"><label>Modelo *</label>
-      <select id="pm${i}"><option value="">Selecione...</option>${prods.map(p=>`<option value="${p.id}" data-n="${p.nome}" data-v="${p.valor_venda||0}">${p.nome}</option>`).join('')}</select>
-    </div>
-    <div class="f"><label>Quantidade</label><input type="number" id="pq${i}" min="1" placeholder="0"></div>
-    <div class="f"><label>Obs</label><input id="po${i}" placeholder="Ex: Manga longa"></div>
-  </div>`;
-  var rem=document.createElement('button');rem.className='btn br2 sm';rem.textContent='Remover';
-  rem.onclick=function(){div.remove();};
-  div.firstElementChild.appendChild(rem);
+  var szInfH=szInf.map(function(s){return '<div class="si"><div class="slbl">'+s+'</div><input class="sinp" type="number" min="0" value="0" data-sz="i'+i+'-'+s+'" oninput="totPcs()"></div>';}).join('');
+  var szMAH=szAdu.map(function(s){return '<div class="si"><div class="slbl">'+s+'</div><input class="sinp" type="number" min="0" value="0" data-sz="m'+i+'-'+s+'" oninput="totPcs()"></div>';}).join('');
+  var szFAH=szAdu.map(function(s){return '<div class="si"><div class="slbl">'+s+'</div><input class="sinp" type="number" min="0" value="0" data-sz="f'+i+'-'+s+'" oninput="totPcs()"></div>';}).join('');
+  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b style="font-size:13px;color:var(--g)">Produto '+i+'</b><button class="btn br2 sm" id="rem'+i+'">Remover</button></div>'+
+    '<div class="row" style="margin-bottom:10px"><div class="f"><label>Modelo *</label><select id="pm'+i+'"><option value="">Selecione...</option>'+pOpts+'</select></div>'+
+    '<div class="f"><label>Observação do produto</label><input id="po'+i+'" placeholder="Ex: Manga longa, personalização nas costas..."></div></div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">INFANTIL</div>'+
+    '<div class="sg inf" style="margin-bottom:8px">'+szInfH+'</div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">ADULTO MASCULINO</div>'+
+    '<div class="sg adu" style="margin-bottom:8px">'+szMAH+'</div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">ADULTO FEMININO</div>'+
+    '<div class="sg adu" style="margin-bottom:8px">'+szFAH+'</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid var(--b)"><span style="font-size:11px;font-weight:700;color:var(--m)">TOTAL DESTE PRODUTO</span><span style="font-size:18px;font-weight:900;color:var(--g)" id="ptot'+i+'">0</span></div>';
+  div.querySelector('#rem'+i).onclick=function(){div.remove();totPcs();};
   g('plist').appendChild(div);
 }
 
 function totPcs(){
-  var t=0;
-  document.querySelectorAll('.sinp').forEach(inp=>t+=parseInt(inp.value)||0);
-  var el=g('otot');if(el)el.textContent=t;return t;
+  var total=0;
+  document.querySelectorAll('.pcard').forEach(function(card){
+    var ci=card.id.slice(2);var sub=0;
+    card.querySelectorAll('.sinp').forEach(function(inp){sub+=parseInt(inp.value)||0;});
+    var el=g('ptot'+ci);if(el)el.textContent=sub;total+=sub;
+  });
+  var el=g('otot');if(el)el.textContent=total;return total;
 }
 
 function getSz(){
-  var o={};
-  document.querySelectorAll('.sinp').forEach(inp=>o[inp.dataset.sz]=parseInt(inp.value)||0);
-  return o;
+  var o={};document.querySelectorAll('.sinp').forEach(function(inp){if(inp.dataset.sz)o[inp.dataset.sz]=parseInt(inp.value)||0;});return o;
 }
 
 function getProds(){
   var arr=[];
-  document.querySelectorAll('.pcard').forEach(card=>{
-    var i=card.id.slice(2);
-    var sel=g('pm'+i);if(!sel||!sel.value)return;
+  document.querySelectorAll('.pcard').forEach(function(card){
+    var ci=card.id.slice(2);
+    var sel=g('pm'+ci);if(!sel||!sel.value)return;
     var opt=sel.options[sel.selectedIndex];
-    arr.push({produto_id:sel.value,nome:opt.dataset.n||opt.text,valor_venda:parseFloat(opt.dataset.v||0),quantidade:iv('pq'+i),obs:v('po'+i)});
+    var sz={};var tot=0;
+    card.querySelectorAll('.sinp').forEach(function(inp){var q=parseInt(inp.value)||0;if(q>0){sz[inp.dataset.sz]=q;tot+=q;}});
+    arr.push({produto_id:sel.value,nome:opt.dataset.n||opt.text,valor_venda:parseFloat(opt.dataset.v||0),quantidade:tot,sizes:sz,obs:v('po'+ci)});
   });return arr;
 }
 
@@ -349,7 +343,7 @@ async function criarOP(){
     faccionista_id:facId||null,faccionista_nome:facNome,
     envio_costura:v('oenv')||null,retorno_costura:v('oret')||null,
     tecido:v('otec'),cor:v('ocor'),gola:v('ogola'),punho:v('opunho'),
-    abertura:v('oaber'),cobre:v('ocobre'),bolso:v('obolso'),obs:v('oobs'),arte:v('oarte'),
+    abertura:v('oaber'),cobre:v('ocobre'),bolso:v('obolso'),obs:v('oobs-geral'),arte:v('oarte'),
     total_pecas:tot,sizes:getSz(),produtos:getProds(),etapa:'Corte',obs_etapas:{},retirado:false
   });
   if(error){alert('Erro: '+error.message);return;}
@@ -884,111 +878,30 @@ async function pgExp(){
 }
 
 // ━━ TAREFAS ━━
-async function _pgTarHistorico(mc){
-  // Filtros
-  var filtros=document.createElement('div');filtros.className='card';
-  filtros.innerHTML=`<div class="ct">Filtrar histórico</div>
-    <div class="row r3">
-      <div class="f"><label>Setor</label>
-        <select id="hf-setor">
-          <option value="">Todos os setores</option>
-          <option value="corte">Corte</option>
-          <option value="personalizacao">Personalização</option>
-          <option value="artes">Artes</option>
-          <option value="costura">Costura</option>
-          <option value="revisao">Revisão/Expedição</option>
-        </select>
-      </div>
-      <div class="f"><label>De</label><input type="date" id="hf-de" value="${new Date(Date.now()-30*864e5).toISOString().slice(0,10)}"></div>
-      <div class="f"><label>Até</label><input type="date" id="hf-ate" value="${hoje()}"></div>
-    </div>
-    <div class="frow"><button class="btn ba" id="btn-hf-buscar">Buscar</button></div>`;
-  mc.appendChild(filtros);
-
-  var resultado=document.createElement('div');resultado.id='hist-resultado';mc.appendChild(resultado);
-
-  async function buscarHist(){
-    resultado.innerHTML=ld();
-    var q=DB.from('tarefas').select('*').eq('status','concluida').order('concluida_em',{ascending:false}).limit(200);
-    var setor=v('hf-setor'),de=v('hf-de'),ate=v('hf-ate');
-    if(setor)q=q.eq('setor',setor);
-    if(de)q=q.gte('concluida_em',de+'T00:00:00');
-    if(ate)q=q.lte('concluida_em',ate+'T23:59:59');
-    var {data:hist}=await q;hist=hist||[];
-
-    if(!hist.length){resultado.innerHTML='<div class="card" style="color:var(--m);font-size:12px;text-align:center;padding:20px">Nenhuma tarefa concluída no período.</div>';return;}
-
-    var card=document.createElement('div');card.className='card';card.style.padding='0';
-    card.innerHTML=`<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g);display:flex;justify-content:space-between">
-      <span>Tarefas concluídas (${hist.length})</span>
-    </div>
-    <div class="tw"><table><thead><tr>
-      <th>Concluída em</th><th>Título</th><th>OP</th><th>Setor</th>
-      <th>Concluída por</th><th>Observação</th><th>Criada por</th>
-    </tr></thead><tbody id="hist-rows"></tbody></table></div>`;
-    resultado.innerHTML='';resultado.appendChild(card);
-
-    var tbody=card.querySelector('#hist-rows');
-    var setorCls={corte:'bbl',personalizacao:'bwn',artes:'bpu',costura:'bnv',revisao:'bgy'};
-    hist.forEach(t=>{
-      var tr=document.createElement('tr');
-      var dt=t.concluida_em?new Date(t.concluida_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'--';
-      tr.innerHTML=`<td style="white-space:nowrap;font-size:11px">${dt}</td>
-        <td><b>${t.titulo}</b></td>
-        <td>${t.op_num?`<span class="badge bnv">${t.op_num}</span>`:'--'}</td>
-        <td><span class="badge ${setorCls[t.setor]||'bgy'}">${t.setor}</span></td>
-        <td>${t.concluida_por||'--'}</td>
-        <td style="font-size:11px;color:var(--m);max-width:200px">${t.obs_conclusao||'--'}</td>
-        <td style="font-size:11px;color:var(--m)">${t.criado_por||'--'}</td>`;
-      tbody.appendChild(tr);
-    });
-  }
-
-  filtros.querySelector('#btn-hf-buscar').onclick=buscarHist;
-  buscarHist(); // carregar com filtros padrão
-}
-
 async function pgTar(sub){
   var isOp=U.nivel==='operacional';
-  if(!isOp)sub=sub||'ativas'; else sub='ativas';
-  var mc=g('mc');mc.innerHTML='';
-
-  // Abas para admin/supervisor
-  if(!isOp){
-    var hdr=document.createElement('div');
-    hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:12px';
-    hdr.innerHTML=`<b style="font-size:15px;color:var(--g)">Tarefas</b>`;
-    [['ativas','Ativas'],['historico','Histórico']].forEach(([k,l])=>{
-      var b=document.createElement('button');
-      b.className='btn sm '+(k===sub?'bp':'bs');b.textContent=l;
-      b.onclick=()=>pgTar(k);hdr.appendChild(b);
-    });
-    mc.appendChild(hdr);
-    if(sub==='historico'){await _pgTarHistorico(mc);return;}
+  if(!isOp){sub=sub||'ativas';var mc2=g('mc');mc2.innerHTML='';
+    var hdr=document.createElement('div');hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:12px';
+    hdr.innerHTML='<b style="font-size:15px;color:var(--g)">Tarefas</b>';
+    [['ativas','Ativas'],['historico','Histórico']].forEach(function(kl){var k=kl[0],l=kl[1];var b=document.createElement('button');b.className='btn sm '+(k===sub?'bp':'bs');b.textContent=l;b.onclick=function(){pgTar(k);};hdr.appendChild(b);});
+    mc2.appendChild(hdr);if(sub==='historico'){await _pgTarHistorico(mc2);return;}
   }
-
+  var isOp=U.nivel==='operacional';
   var q=DB.from('tarefas').select('*').order('prioridade');
   if(isOp)q=q.eq('setor',U.setor);
   var {data:tar}=await q;tar=tar||[];
   var pend=tar.filter(t=>t.status!=='concluida');
-  // Operacional: concluídas somem após 7 dias
   var _7d=new Date(Date.now()-7*24*60*60*1000).toISOString();
   var conc=tar.filter(t=>t.status==='concluida'&&(!isOp||(t.concluida_em&&t.concluida_em>_7d)));
+  var mc=g('mc');mc.innerHTML='';
 
   if(!isOp){
     var card=document.createElement('div');card.className='card';
-    // Carregar OPs para o select
-  var {data:_opsT}=await DB.from('ops').select('id,num,cliente,etapa').order('num');_opsT=_opsT||[];
-  var opOptsTar=_opsT.map(o=>`<option value="${o.num}" data-et="${o.etapa}">${o.num} — ${o.cliente} (${o.etapa})</option>`).join('');
-  card.innerHTML=`<div class="ct">Nova tarefa</div>
+    card.innerHTML=`<div class="ct">Nova tarefa</div>
       <div class="row r3">
-        <div class="f"><label>OP vinculada</label>
-          <select id="tnop">
-            <option value="">Sem OP</option>${opOptsTar}
-          </select>
-        </div>
-        <div class="f"><label>Título *</label><input id="tnt" placeholder="Ex: Cortar 50 peças polo"></div>
-        <div class="f"><label>Setor *</label><select id="tns"><option value="corte">Corte</option><option value="personalizacao">Personalização</option><option value="artes">Artes</option><option value="costura">Costura</option><option value="revisao">Revisão/Expedição</option></select></div>
+        <div class="f"><label>OP vinculada</label><input id="tnop" placeholder="OP-001"></div>
+        <div class="f"><label>Título *</label><input id="tnt"></div>
+        <div class="f"><label>Setor *</label><select id="tns"><option value="corte">Corte</option><option value="personalizacao">Personalização</option><option value="artes">Artes</option><option value="revisao">Revisão/Expedição</option></select></div>
       </div>
       <div class="row r3">
         <div class="f"><label>Prioridade (1=alta)</label><input type="number" id="tnp" value="1" min="1" max="10"></div>
@@ -1062,75 +975,38 @@ async function editTar(id){
   };
 }
 async function concTar(id,titulo){
-  // Modal com campo de observação
-  var obsConc=await new Promise(res=>{
-    openM(`<b style="font-size:14px;color:var(--g)">Concluir tarefa</b>
-      <div style="margin:10px 0 4px;font-size:12px;color:var(--m)">${titulo}</div>
-      <div class="f" style="margin-top:12px"><label>Observação (opcional)</label>
-        <textarea id="obs-conc" rows="3" placeholder="Ex: Peças separadas por cor, aguardando retirada..."></textarea>
-      </div>
-      <div class="frow">
-        <button class="btn bs" onclick="closeM();_concRes(null)">Cancelar</button>
-        <button class="btn ba" id="btn-conf-conc">Confirmar conclusão</button>
-      </div>`);
+  var obsConc=await new Promise(function(res){
+    openM('<b style="font-size:14px;color:var(--g)">Concluir tarefa</b><div style="margin:10px 0 4px;font-size:12px;color:var(--m)">'+titulo+'</div><div class="f" style="margin-top:12px"><label>Observação (opcional)</label><textarea id="obs-conc" rows="3" placeholder="Ex: Peças separadas, aguardando retirada..."></textarea></div><div class="frow"><button class="btn bs" id="btn-canc-conc">Cancelar</button><button class="btn ba" id="btn-conf-conc">Confirmar conclusão</button></div>');
     window._concRes=res;
-    g('btn-conf-conc').onclick=()=>{var obs=v('obs-conc');closeM();res(obs);};
+    g('btn-canc-conc').onclick=function(){closeM();res(null);};
+    g('btn-conf-conc').onclick=function(){var obs=v('obs-conc');closeM();res(obs);};
   });
-  if(obsConc===null)return; // cancelado
-  // Buscar dados da tarefa para saber a OP e etapa atual
-  var {data:tarDet}=await DB.from('tarefas').select('op_num,setor').eq('id',id).single();
-  // Marcar como concluída
+  if(obsConc===null)return;
+  var {data:tarDet}=await DB.from('tarefas').select('op_num').eq('id',id).single();
   await DB.from('tarefas').update({status:'concluida',concluida_por:U.nome,concluida_em:new Date().toISOString(),obs_conclusao:obsConc||null}).eq('id',id);
-  // Se tem OP vinculada, perguntar próxima etapa
-  if(tarDet?.op_num){
-    var {data:opAtual}=await DB.from('ops').select('etapa,num,cliente').eq('num',tarDet.op_num).single();
-    if(opAtual){
-      var etIdx=ETAPAS.indexOf(opAtual.etapa);
-      var proxOpts=ETAPAS.slice(etIdx+1); // etapas disponíveis após a atual
-      if(proxOpts.length>0&&opAtual.etapa!=='Concluída'){
-        // Montar select das próximas etapas
-        var optsHtml=proxOpts.map(e=>`<option value="${e}">${e}</option>`).join('');
-        openM(`<b style="font-size:14px;color:var(--g)">Encaminhar OP ${opAtual.num}</b>
-          <p style="font-size:12px;color:var(--m);margin:8px 0 14px">Tarefa concluída. Para qual etapa esta OP vai agora?</p>
-          <div class="f" style="margin-bottom:14px"><label>Próxima etapa</label>
-            <select id="prox-et">${optsHtml}</select>
-          </div>
-          <div class="frow">
-            <button class="btn bs" onclick="closeM()">Só concluir</button>
-            <button class="btn ba" id="btn-encaminhar">Encaminhar e criar tarefa</button>
-          </div>`);
-        g('btn-encaminhar').onclick=async()=>{
-          var novaEtapa=g('prox-et').value;
-          // Atualizar etapa da OP
-          await DB.from('ops').update({etapa:novaEtapa}).eq('num',opAtual.num);
-          // Criar tarefa automática para o setor da próxima etapa
-          var novoSetor=ETAPA_SETOR[novaEtapa]||'corte';
-          await DB.from('tarefas').insert({
-            op_num:opAtual.num,
-            titulo:`${novaEtapa} — OP ${opAtual.num} (${opAtual.cliente})`,
-            descricao:`Tarefa criada automaticamente ao avançar de ${opAtual.etapa} para ${novaEtapa}.`,
-            setor:novoSetor,prioridade:2,
-            data_agendada:hoje(),status:'pendente',criado_por:U.nome
-          });
-          closeM();
-          alert(`OP ${opAtual.num} encaminhada para ${novaEtapa}. Tarefa criada para o setor de ${novoSetor}.`);
-          pgTar();return;
-        };
+  if(tarDet&&tarDet.op_num){
+    var {data:opAt}=await DB.from('ops').select('etapa,num,cliente').eq('num',tarDet.op_num).single();
+    if(opAt&&opAt.etapa!=='Concluída'){
+      var etIdx=ETAPAS.indexOf(opAt.etapa);var proxOpts=ETAPAS.slice(etIdx+1);
+      if(proxOpts.length){
+        var optsH=proxOpts.map(function(e){return '<option value="'+e+'">'+e+'</option>';}).join('');
+        openM('<b style="font-size:14px;color:var(--g)">Encaminhar OP '+opAt.num+'</b><p style="font-size:12px;color:var(--m);margin:8px 0 14px">Para qual etapa vai agora?</p><div class="f" style="margin-bottom:14px"><label>Próxima etapa</label><select id="prox-et">'+optsH+'</select></div><div class="frow"><button class="btn bs" id="btn-sc">Só concluir</button><button class="btn ba" id="btn-enc">Encaminhar e criar tarefa</button></div>');
+        g('btn-sc').onclick=function(){closeM();_compTar(titulo,obsConc);pgTar();};
+        g('btn-enc').onclick=async function(){
+          var ne=v('prox-et');
+          await DB.from('ops').update({etapa:ne}).eq('num',opAt.num);
+          var ns=ETAPA_SETOR[ne]||'corte';
+          await DB.from('tarefas').insert({op_num:opAt.num,titulo:ne+' — OP '+opAt.num+' ('+opAt.cliente+')',descricao:'Avançada de '+opAt.etapa+' para '+ne+'.',setor:ns,prioridade:2,data_agendada:hoje(),status:'pendente',criado_por:U.nome});
+          closeM();alert('OP '+opAt.num+' encaminhada para '+ne+'.');_compTar(titulo,obsConc);pgTar();
+        };return;
       }
     }
   }
+  _compTar(titulo,obsConc);pgTar();}
+function _compTar(titulo,obsConc){
   var w=window.open('','_blank','width=380,height:420');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comprovante</title><style>body{font-family:system-ui,sans-serif;padding:22px;max-width:340px;margin:0 auto;font-size:13px}.logo{background:#1a4a1f;color:#fff;padding:7px 12px;border-radius:5px;font-weight:800;display:inline-block;margin-bottom:14px}h2{color:#1a4a1f;margin-bottom:12px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee}.lbl{color:#888}.val{font-weight:700}@media print{button{display:none}}</style></head><body>
-    <div class="logo">NorteSul Uniformes</div><h2>Comprovante de Conclusão</h2>
-    <div class="row"><span class="lbl">Tarefa</span><span class="val">${titulo}</span></div>
-    <div class="row"><span class="lbl">Setor</span><span class="val">${U.setor}</span></div>
-    <div class="row"><span class="lbl">Por</span><span class="val">${U.nome}</span></div>
-    <div class="row"><span class="lbl">Data/Hora</span><span class="val">${new Date().toLocaleString('pt-BR')}</span></div>
-    ${obsConc?`<div class="row"><span class="lbl">Observação</span><span class="val">${obsConc}</span></div>`:''}
-    <div style="text-align:center;margin-top:18px"><button onclick="window.print()" style="background:#1a4a1f;color:#fff;border:none;padding:9px 22px;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer">Imprimir</button></div>
-    </body></html>`);
-  w.document.close();pgTar();
-}
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comprovante</title><style>body{font-family:system-ui,sans-serif;padding:22px;max-width:340px;margin:0 auto;font-size:13px}.logo{background:#1a4a1f;color:#fff;padding:7px 12px;border-radius:5px;font-weight:800;display:inline-block;margin-bottom:14px}h2{color:#1a4a1f;margin-bottom:12px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee}.lbl{color:#888}.val{font-weight:700}@media print{button{display:none}}</style></head><body><div class="logo">NorteSul Uniformes</div><h2>Comprovante de Conclusão</h2><div class="row"><span class="lbl">Tarefa</span><span class="val">'+titulo+'</span></div><div class="row"><span class="lbl">Setor</span><span class="val">'+U.setor+'</span></div><div class="row"><span class="lbl">Por</span><span class="val">'+U.nome+'</span></div><div class="row"><span class="lbl">Data/Hora</span><span class="val">'+new Date().toLocaleString('pt-BR')+'</span></div>'+(obsConc?'<div class="row"><span class="lbl">Observação</span><span class="val">'+obsConc+'</span></div>':'')+'<div style="text-align:center;margin-top:18px"><button onclick="window.print()" style="background:#1a4a1f;color:#fff;border:none;padding:9px 22px;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer">Imprimir</button></div></body></html>');
+  w.document.close();}
 
 // ━━ USUÁRIOS ━━
 async function pgUsr(){
@@ -1191,31 +1067,43 @@ async function editUsr(id){
   };
 }
 
-// ━━ AVISOS ━━
+
+async function _pgTarHistorico(mc){
+  var filtros=document.createElement('div');filtros.className='card';
+  filtros.innerHTML='<div class="ct">Filtrar histórico</div><div class="row r3"><div class="f"><label>Setor</label><select id="hf-setor"><option value="">Todos</option><option value="corte">Corte</option><option value="personalizacao">Personalização</option><option value="artes">Artes</option><option value="costura">Costura</option><option value="revisao">Revisão/Expedição</option></select></div><div class="f"><label>De</label><input type="date" id="hf-de" value="'+new Date(Date.now()-30*864e5).toISOString().slice(0,10)+'"></div><div class="f"><label>Até</label><input type="date" id="hf-ate" value="'+hoje()+'"></div></div><div class="frow"><button class="btn ba" id="btn-hf">Buscar</button></div>';
+  mc.appendChild(filtros);
+  var res=document.createElement('div');mc.appendChild(res);
+  var cls={corte:'bbl',personalizacao:'bwn',artes:'bpu',costura:'bnv',revisao:'bgy'};
+  async function buscar(){
+    res.innerHTML=ld();
+    var q=DB.from('tarefas').select('*').eq('status','concluida').order('concluida_em',{ascending:false}).limit(200);
+    var setor=v('hf-setor'),de=v('hf-de'),ate=v('hf-ate');
+    if(setor)q=q.eq('setor',setor);
+    if(de)q=q.gte('concluida_em',de+'T00:00:00');
+    if(ate)q=q.lte('concluida_em',ate+'T23:59:59');
+    var {data:hist}=await q;hist=hist||[];
+    if(!hist.length){res.innerHTML='<div class="card" style="color:var(--m);font-size:12px;text-align:center;padding:20px">Nenhuma tarefa concluída no período.</div>';return;}
+    var card=document.createElement('div');card.className='card';card.style.padding='0';
+    card.innerHTML='<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g)">Concluídas ('+hist.length+')</div><div class="tw"><table><thead><tr><th>Concluída em</th><th>Título</th><th>OP</th><th>Setor</th><th>Por</th><th>Observação</th><th>Criada por</th></tr></thead><tbody id="hist-rows"></tbody></table></div>';
+    res.innerHTML='';res.appendChild(card);
+    var tbody=card.querySelector('#hist-rows');
+    hist.forEach(function(t){
+      var tr=document.createElement('tr');
+      var dt=t.concluida_em?new Date(t.concluida_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'--';
+      tr.innerHTML='<td style="white-space:nowrap;font-size:11px">'+dt+'</td><td><b>'+t.titulo+'</b></td><td>'+(t.op_num?'<span class="badge bnv">'+t.op_num+'</span>':'--')+'</td><td><span class="badge '+(cls[t.setor]||'bgy')+'">'+t.setor+'</span></td><td>'+(t.concluida_por||'--')+'</td><td style="font-size:11px;color:var(--m);max-width:200px">'+(t.obs_conclusao||'--')+'</td><td style="font-size:11px;color:var(--m)">'+(t.criado_por||'--')+'</td>';
+      tbody.appendChild(tr);
+    });
+  }
+  filtros.querySelector('#btn-hf').onclick=buscar;buscar();
+}
+
 async function pgAvs(){
   var {data:avs}=await DB.from('avisos').select('*').order('criado_em',{ascending:false});avs=avs||[];
   var mc=g('mc');mc.innerHTML='';
-  var hdr=document.createElement('div');
-  hdr.innerHTML=`<b style="font-size:15px;color:var(--g)">Quadro de Avisos</b>`;
-  mc.appendChild(hdr);
-
-  // Form novo aviso
+  var hdr=document.createElement('div');hdr.innerHTML='<b style="font-size:15px;color:var(--g)">Quadro de Avisos</b>';mc.appendChild(hdr);
   var card=document.createElement('div');card.className='card';card.style.marginTop='10px';
-  card.innerHTML=`<div class="ct">Novo aviso</div>
-    <div class="row">
-      <div class="f"><label>Título *</label><input id="av-tit" placeholder="Ex: Reunião amanhã"></div>
-      <div class="f"><label>Cor de destaque</label>
-        <select id="av-cor">
-          <option value="#1a4a1f">Verde (padrão)</option>
-          <option value="#b92c2c">Vermelho (urgente)</option>
-          <option value="#8a5a00">Amarelo (atenção)</option>
-          <option value="#1a4a8a">Azul (informação)</option>
-        </select>
-      </div>
-    </div>
-    <div class="row r1"><div class="f"><label>Mensagem *</label><textarea id="av-msg" rows="3" placeholder="Texto do aviso..."></textarea></div></div>
-    <div class="frow"><button class="btn ba" id="btn-novo-av">Publicar aviso</button></div>`;
-  card.querySelector('#btn-novo-av').onclick=async()=>{
+  card.innerHTML='<div class="ct">Novo aviso</div><div class="row"><div class="f"><label>Título *</label><input id="av-tit" placeholder="Ex: Reunião amanhã"></div><div class="f"><label>Cor</label><select id="av-cor"><option value="#1a4a1f">Verde (padrão)</option><option value="#b92c2c">Vermelho (urgente)</option><option value="#8a5a00">Amarelo (atenção)</option><option value="#1a4a8a">Azul (informação)</option></select></div></div><div class="row r1"><div class="f"><label>Mensagem *</label><textarea id="av-msg" rows="3" placeholder="Texto do aviso..."></textarea></div></div><div class="frow"><button class="btn ba" id="btn-nav">Publicar</button></div>';
+  card.querySelector('#btn-nav').onclick=async function(){
     var tit=v('av-tit').trim(),msg=v('av-msg').trim();
     if(!tit||!msg){alert('Preencha título e mensagem.');return;}
     var {error}=await DB.from('avisos').insert({titulo:tit,mensagem:msg,cor:v('av-cor'),ativo:true,criado_por:U.nome});
@@ -1223,167 +1111,73 @@ async function pgAvs(){
     alert('Aviso publicado!');pgAvs();
   };
   mc.appendChild(card);
-
-  // Lista
   var lista=document.createElement('div');lista.className='card';lista.style.padding='0';
-  lista.innerHTML=`<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g)">Avisos publicados (${avs.length})</div><div id="avs-list" style="padding:12px"></div>`;
+  lista.innerHTML='<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g)">Avisos ('+avs.length+')</div><div id="avs-list" style="padding:12px"></div>';
   mc.appendChild(lista);
   var cont=lista.querySelector('#avs-list');
   if(!avs.length){cont.innerHTML='<div style="color:var(--m);font-size:12px">Nenhum aviso publicado.</div>';return;}
-  avs.forEach(a=>{
+  avs.forEach(function(a){
     var div=document.createElement('div');
-    div.style.cssText=`padding:10px 12px;border-left:4px solid ${a.cor||'var(--g)'};background:${a.cor?a.cor+'18':'var(--s2)'};border-radius:0 6px 6px 0;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px`;
-    div.innerHTML=`<div style="flex:1"><div style="font-weight:700;font-size:13px;color:${a.cor||'var(--g)'}">${a.titulo}</div><div style="font-size:12px;color:var(--m);margin-top:3px;white-space:pre-wrap">${a.mensagem}</div><div style="font-size:10px;color:var(--m);margin-top:5px">Por ${a.criado_por||'--'} · ${new Date(a.criado_em).toLocaleString('pt-BR')}</div></div>`;
+    div.style.cssText='padding:10px 12px;border-left:4px solid '+(a.cor||'var(--g)')+';background:'+(a.cor?a.cor+'18':'var(--s2)')+';border-radius:0 6px 6px 0;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px';
+    div.innerHTML='<div style="flex:1"><div style="font-weight:700;font-size:13px;color:'+(a.cor||'var(--g)')+'">'+a.titulo+'</div><div style="font-size:12px;color:var(--m);margin-top:3px;white-space:pre-wrap">'+a.mensagem+'</div><div style="font-size:10px;color:var(--m);margin-top:5px">Por '+(a.criado_por||'--')+' · '+new Date(a.criado_em).toLocaleString('pt-BR')+'</div></div>';
     var btns=document.createElement('div');btns.style.display='flex';btns.style.gap='4px';
-    var bst=document.createElement('button');bst.className='btn bw2 sm';bst.textContent=a.ativo?'Desativar':'Ativar';
-    bst.onclick=async()=>{await DB.from('avisos').update({ativo:!a.ativo}).eq('id',a.id);pgAvs();};
-    var bdl=document.createElement('button');bdl.className='btn br2 sm';bdl.textContent='Excluir';
-    bdl.onclick=async()=>{if(!confirm('Excluir aviso?'))return;await DB.from('avisos').delete().eq('id',a.id);pgAvs();};
+    var bst=document.createElement('button');bst.className='btn bw2 sm';bst.textContent=a.ativo?'Desativar':'Ativar';bst.onclick=async function(){await DB.from('avisos').update({ativo:!a.ativo}).eq('id',a.id);pgAvs();};
+    var bdl=document.createElement('button');bdl.className='btn br2 sm';bdl.textContent='Excluir';bdl.onclick=async function(){if(!confirm('Excluir?'))return;await DB.from('avisos').delete().eq('id',a.id);pgAvs();};
     btns.appendChild(bst);btns.appendChild(bdl);div.appendChild(btns);cont.appendChild(div);
   });
 }
 
-// ━━ AUDITORIA ━━
 async function pgAud(){
   var mc=g('mc');mc.innerHTML='';
-
-  // Cabeçalho com filtros
-  var hdr=document.createElement('div');
-  hdr.innerHTML=`<b style="font-size:15px;color:var(--g)">Auditoria</b>`;
-  mc.appendChild(hdr);
-
+  var hdr=document.createElement('div');hdr.innerHTML='<b style="font-size:15px;color:var(--g)">Auditoria</b>';mc.appendChild(hdr);
+  var acaoCls={LOGIN:'bok',LOGOUT:'bgy',CRIOU_OP:'bbl',EDITOU_OP:'bwn',EXCLUIU_OP:'bred',RETIRADA:'bok',CRIOU_TAREFA:'bbl',CONCLUIU_TAREFA:'bok',LANCOU_CAIXA:'bbl',LANCOU_VENDA:'bok',ENTRADA_ESTOQUE:'bwn',CRIOU_CLIENTE:'bbl',CRIOU_PRODUTO:'bbl',RESET_SENHA:'bwn'};
   var filtros=document.createElement('div');filtros.className='card';filtros.style.marginTop='10px';
-  filtros.innerHTML=`<div class="ct">Filtrar registros</div>
-    <div class="row r3">
-      <div class="f"><label>Usuário</label><input id="af-usr" placeholder="Nome do usuário"></div>
-      <div class="f"><label>Ação</label>
-        <select id="af-acao">
-          <option value="">Todas</option>
-          <option>LOGIN</option>
-          <option>LOGOUT</option>
-          <option>CRIOU_OP</option>
-          <option>EDITOU_OP</option>
-          <option>EXCLUIU_OP</option>
-          <option>RETIRADA</option>
-          <option>CRIOU_TAREFA</option>
-          <option>CONCLUIU_TAREFA</option>
-          <option>LANCOU_CAIXA</option>
-          <option>LANCOU_VENDA</option>
-          <option>ENTRADA_ESTOQUE</option>
-          <option>CRIOU_CLIENTE</option>
-          <option>CRIOU_PRODUTO</option>
-        </select>
-      </div>
-      <div class="f"><label>De</label><input type="date" id="af-de" value="${new Date(Date.now()-7*864e5).toISOString().slice(0,10)}"></div>
-      <div class="f"><label>Até</label><input type="date" id="af-ate" value="${hoje()}"></div>
-    </div>
-    <div class="frow"><button class="btn ba" id="btn-af-buscar">Buscar</button></div>`;
+  var acOpts=Object.keys(acaoCls).map(function(a){return '<option>'+a+'</option>';}).join('');
+  filtros.innerHTML='<div class="ct">Filtrar registros</div><div class="row r3"><div class="f"><label>Usuário</label><input id="af-usr" placeholder="Nome do usuário"></div><div class="f"><label>Ação</label><select id="af-acao"><option value="">Todas</option>'+acOpts+'</select></div><div class="f"><label>De</label><input type="date" id="af-de" value="'+new Date(Date.now()-7*864e5).toISOString().slice(0,10)+'"></div><div class="f"><label>Até</label><input type="date" id="af-ate" value="'+hoje()+'"></div></div><div class="frow"><button class="btn ba" id="btn-af">Buscar</button></div>';
   mc.appendChild(filtros);
-
-  var resultado=document.createElement('div');resultado.id='aud-resultado';mc.appendChild(resultado);
-
-  var acaoCls={
-    LOGIN:'bok',LOGOUT:'bgy',CRIOU_OP:'bbl',EDITOU_OP:'bwn',EXCLUIU_OP:'bred',
-    RETIRADA:'bok',CRIOU_TAREFA:'bbl',CONCLUIU_TAREFA:'bok',
-    LANCOU_CAIXA:'bbl',LANCOU_VENDA:'bok',ENTRADA_ESTOQUE:'bwn',
-    CRIOU_CLIENTE:'bbl',CRIOU_PRODUTO:'bbl',RESET_SENHA:'bwn'
-  };
-
-  async function buscarAud(){
-    resultado.innerHTML=ld();
+  var res=document.createElement('div');mc.appendChild(res);
+  async function buscar(){
+    res.innerHTML=ld();
     var q=DB.from('auditoria').select('*').order('criado_em',{ascending:false}).limit(300);
-    var usr=v('af-usr').trim(),acao=v('af-acao'),de=v('af-de'),ate=v('af-ate');
+    var acao=v('af-acao'),de=v('af-de'),ate=v('af-ate');
     if(acao)q=q.eq('acao',acao);
     if(de)q=q.gte('criado_em',de+'T00:00:00');
     if(ate)q=q.lte('criado_em',ate+'T23:59:59');
     var {data:logs}=await q;logs=logs||[];
-
-    // Filtro de usuário client-side (ilike não disponível no anon)
-    if(usr)logs=logs.filter(l=>(l.usuario_nome||'').toLowerCase().includes(usr.toLowerCase()));
-
-    if(!logs.length){resultado.innerHTML='<div class="card" style="color:var(--m);font-size:12px;text-align:center;padding:20px">Nenhum registro encontrado.</div>';return;}
-
+    var usr=v('af-usr').trim();if(usr)logs=logs.filter(function(l){return (l.usuario_nome||'').toLowerCase().includes(usr.toLowerCase());});
+    if(!logs.length){res.innerHTML='<div class="card" style="color:var(--m);font-size:12px;text-align:center;padding:20px">Nenhum registro encontrado.</div>';return;}
     var card=document.createElement('div');card.className='card';card.style.padding='0';
-    card.innerHTML=`<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g);display:flex;justify-content:space-between;align-items:center">
-      <span>Registros (${logs.length})</span>
-      <small style="font-weight:400;color:var(--m)">Nenhum log pode ser apagado</small>
-    </div>
-    <div class="tw"><table><thead><tr>
-      <th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Tabela</th><th>Registro</th><th>Detalhe</th>
-    </tr></thead><tbody id="aud-rows"></tbody></table></div>`;
-    resultado.innerHTML='';resultado.appendChild(card);
-
+    card.innerHTML='<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g);display:flex;justify-content:space-between;align-items:center"><span>Registros ('+logs.length+')</span><small style="font-weight:400;color:var(--m)">Logs imutáveis</small></div><div class="tw"><table><thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Tabela</th><th>Registro</th><th>Detalhe</th></tr></thead><tbody id="aud-rows"></tbody></table></div>';
+    res.innerHTML='';res.appendChild(card);
     var tbody=card.querySelector('#aud-rows');
-    logs.forEach(l=>{
+    logs.forEach(function(l){
       var tr=document.createElement('tr');
       var dt=new Date(l.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-      var det='';
-      if(l.detalhe&&typeof l.detalhe==='object'){
-        det=Object.entries(l.detalhe).filter(([,v])=>v!==null&&v!==undefined&&v!=='').map(([k,v])=>`<span style="color:var(--m)">${k}:</span> ${v}`).join(' · ');
-      }
-      tr.innerHTML=`<td style="white-space:nowrap;font-size:11px">${dt}</td>
-        <td style="font-weight:700">${l.usuario_nome||'--'}</td>
-        <td><span class="badge ${acaoCls[l.acao]||'bgy'}" style="font-size:9px">${l.acao||'--'}</span></td>
-        <td style="font-size:11px;color:var(--m)">${l.tabela||'--'}</td>
-        <td style="font-size:11px"><b>${l.registro_id||'--'}</b></td>
-        <td style="font-size:11px;color:var(--m);max-width:220px">${det||'--'}</td>`;
+      var det=l.detalhe&&typeof l.detalhe==='object'?Object.entries(l.detalhe).filter(function(e){return e[1]!==null&&e[1]!==''&&e[1]!==undefined;}).map(function(e){return '<span style="color:var(--m)">'+e[0]+':</span> '+e[1];}).join(' · '):'';
+      tr.innerHTML='<td style="white-space:nowrap;font-size:11px">'+dt+'</td><td style="font-weight:700">'+(l.usuario_nome||'--')+'</td><td><span class="badge '+(acaoCls[l.acao]||'bgy')+'" style="font-size:9px">'+(l.acao||'--')+'</span></td><td style="font-size:11px;color:var(--m)">'+(l.tabela||'--')+'</td><td style="font-size:11px"><b>'+(l.registro_id||'--')+'</b></td><td style="font-size:11px;color:var(--m);max-width:220px">'+(det||'--')+'</td>';
       tbody.appendChild(tr);
     });
   }
-
-  filtros.querySelector('#btn-af-buscar').onclick=buscarAud;
-  buscarAud();
+  filtros.querySelector('#btn-af').onclick=buscar;buscar();
 }
 
-// ━━ MINHA CONTA ━━
 function minhaContaModal(){
-  openM(`<b style="font-size:14px;color:var(--g)">Minha conta</b>
-    <div style="margin:12px 0 8px;padding:10px;background:var(--s2);border-radius:6px;font-size:12px">
-      <div><b>${U.nome}</b></div>
-      <div style="color:var(--m)">${U.email}</div>
-      <div style="color:var(--m);margin-top:2px">Nível: ${U.nivel}${U.setor?' — '+U.setor:''}</div>
-    </div>
-    <div class="ct" style="margin-top:12px">Trocar senha</div>
-    <div class="row r1"><div class="f"><label>Senha atual</label><input type="password" id="sa" placeholder="Senha atual"></div></div>
-    <div class="row"><div class="f"><label>Nova senha *</label><input type="password" id="sn" placeholder="Mínimo 4 caracteres"></div>
-    <div class="f"><label>Confirmar nova senha *</label><input type="password" id="sc" placeholder="Repita a nova senha"></div></div>
-    <div class="alert ai" style="font-size:11px">A nova senha deve ter pelo menos 4 caracteres.</div>
-    <div id="senha-err" class="alert ar" style="display:none;margin-top:6px"></div>
-    <div class="frow"><button class="btn bs" onclick="closeM()">Cancelar</button><button class="btn ba" id="btn-trocar-senha">Salvar nova senha</button></div>`);
-  g('btn-trocar-senha').onclick=trocarSenha;
-}
-
-async function trocarSenha(){
-  var sa=g('sa').value,sn=g('sn').value,sc=g('sc').value;
-  var err=g('senha-err');
-  // Validar senha atual
-  if(hashPwd(sa)!==U.senha_hash&&sa!=='123'){
-    err.style.display='block';err.textContent='Senha atual incorreta.';return;
-  }
-  if(sn.length<4){err.style.display='block';err.textContent='A nova senha deve ter pelo menos 4 caracteres.';return;}
-  if(sn!==sc){err.style.display='block';err.textContent='As senhas não coincidem.';return;}
-  var novoHash=hashPwd(sn);
-  var {error}=await DB.from('usuarios').update({senha_hash:novoHash}).eq('id',U.id);
-  if(error){err.style.display='block';err.textContent='Erro ao salvar: '+error.message;return;}
-  U.senha_hash=novoHash;saveS();
-  closeM();alert('Senha alterada com sucesso!');
+  openM('<b style="font-size:14px;color:var(--g)">Minha conta</b><div style="margin:12px 0 8px;padding:10px;background:var(--s2);border-radius:6px;font-size:12px"><div><b>'+U.nome+'</b></div><div style="color:var(--m)">'+U.email+'</div><div style="color:var(--m);margin-top:2px">Nível: '+U.nivel+(U.setor?' — '+U.setor:'')+'</div></div><div class="ct" style="margin-top:12px">Trocar senha</div><div class="row r1"><div class="f"><label>Senha atual</label><input type="password" id="sa" placeholder="Senha atual"></div></div><div class="row"><div class="f"><label>Nova senha *</label><input type="password" id="sn" placeholder="Mínimo 4 caracteres"></div><div class="f"><label>Confirmar nova senha *</label><input type="password" id="sc" placeholder="Repita a nova senha"></div></div><div id="senha-err" class="alert ar" style="display:none;margin-top:6px"></div><div class="frow"><button class="btn bs" onclick="closeM()">Cancelar</button><button class="btn ba" id="btn-trocar">Salvar nova senha</button></div>');
+  g('btn-trocar').onclick=async function(){
+    var sa=g('sa').value,sn=g('sn').value,sc=g('sc').value,err=g('senha-err');
+    if(hashPwd(sa)!==U.senha_hash&&sa!=='123'){err.style.display='block';err.textContent='Senha atual incorreta.';return;}
+    if(sn.length<4){err.style.display='block';err.textContent='Mínimo 4 caracteres.';return;}
+    if(sn!==sc){err.style.display='block';err.textContent='Senhas não coincidem.';return;}
+    var novoHash=hashPwd(sn);
+    var {error}=await DB.from('usuarios').update({senha_hash:novoHash}).eq('id',U.id);
+    if(error){err.style.display='block';err.textContent='Erro: '+error.message;return;}
+    U.senha_hash=novoHash;saveS();closeM();alert('Senha alterada!');
+  };
 }
 
 // init
 window.onload=()=>{if(loadS()){rst();g('ls').style.display='none';g('sys').style.display='block';buildNav();go(U.nivel==='operacional'?'tar':'op');
-  // Verificar avisos ativos
-  setTimeout(async()=>{
-    var {data:avs}=await DB.from('avisos').select('*').eq('ativo',true).order('criado_em',{ascending:false}).limit(5);
-    if(avs&&avs.length){
-      var html=avs.map(a=>`<div style="padding:10px 12px;border-left:4px solid ${a.cor||'var(--g)'};background:${a.cor?a.cor+'18':'var(--s2)'};border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-weight:700;font-size:13px;color:${a.cor||'var(--g)'}">${a.titulo}</div><div style="font-size:12px;color:var(--m);margin-top:3px">${a.mensagem}</div><div style="font-size:10px;color:var(--m);margin-top:4px">Por ${a.criado_por||'Admin'}</div></div>`).join('');
-      openM(`<div style="text-align:center;margin-bottom:14px">
-        <span style="font-size:22px">📢</span>
-        <div style="font-size:15px;font-weight:800;color:var(--g);margin-top:4px">Quadro de Avisos</div>
-      </div>
-      ${html}
-      <div class="frow" style="justify-content:center"><button class="btn ba" onclick="closeM()">Entendido</button></div>`);
-    }
-  },400);}else g('le').focus();};
+  setTimeout(async()=>{var {data:avs}=await DB.from('avisos').select('*').eq('ativo',true).order('criado_em',{ascending:false}).limit(5);if(avs&&avs.length){var html=avs.map(a=>`<div style="padding:10px 12px;border-left:4px solid ${a.cor||'var(--g)'};background:${a.cor?a.cor+'18':'var(--s2)'};border-radius:0 6px 6px 0;margin-bottom:8px"><div style="font-weight:700;color:${a.cor||'var(--g)'}">${a.titulo}</div><div style="font-size:12px;color:var(--m);margin-top:3px">${a.mensagem}</div></div>`).join('');openM(`<div style="text-align:center;margin-bottom:14px"><span style="font-size:22px">📢</span><div style="font-size:15px;font-weight:800;color:var(--g);margin-top:4px">Quadro de Avisos</div></div>${html}<div class="frow" style="justify-content:center"><button class="btn ba" onclick="closeM()">Entendido</button></div>`);}},400);}else g('le').focus();};
 </script>
 </body>
 </html>
