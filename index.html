@@ -132,6 +132,13 @@ const MENUS={
   supervisor:[['op','Nova OP'],['cad','Cadastro'],['est','Estoque'],['fin','Financeiro'],['exp','Expedição'],['tar','Tarefas']],
   operacional:[['tar','Tarefas']]
 };
+// Mapa etapa -> setor responsável
+const ETAPA_SETOR={
+  'Corte':'corte','Personalização':'personalizacao','Silk':'personalizacao',
+  'Costura':'costura','Revisão':'revisao','Expedição':'revisao'
+};
+// Fluxo de etapas possíveis
+const ETAPAS=['Corte','Personalização','Silk','Costura','Revisão','Concluída'];
 
 function buildNav(){
   var m=MENUS[U.nivel]||MENUS.operacional;
@@ -152,7 +159,7 @@ function go(p,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
   (btn||g('nav').querySelector(`[data-p="${p}"]`))?.classList.add('on');
   g('mc').innerHTML=ld();
-  ({op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,usr:pgUsr}[p]||pgOP)();
+  var fn={op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,usr:pgUsr}[p];(fn||pgOP)();
 }
 
 // login/logout
@@ -881,11 +888,18 @@ async function pgTar(){
 
   if(!isOp){
     var card=document.createElement('div');card.className='card';
-    card.innerHTML=`<div class="ct">Nova tarefa</div>
+    // Carregar OPs para o select
+  var {data:_opsT}=await DB.from('ops').select('id,num,cliente,etapa').order('num');_opsT=_opsT||[];
+  var opOptsTar=_opsT.map(o=>`<option value="${o.num}" data-et="${o.etapa}">${o.num} — ${o.cliente} (${o.etapa})</option>`).join('');
+  card.innerHTML=`<div class="ct">Nova tarefa</div>
       <div class="row r3">
-        <div class="f"><label>OP vinculada</label><input id="tnop" placeholder="OP-001"></div>
-        <div class="f"><label>Título *</label><input id="tnt"></div>
-        <div class="f"><label>Setor *</label><select id="tns"><option value="corte">Corte</option><option value="personalizacao">Personalização</option><option value="artes">Artes</option><option value="revisao">Revisão/Expedição</option></select></div>
+        <div class="f"><label>OP vinculada</label>
+          <select id="tnop">
+            <option value="">Sem OP</option>${opOptsTar}
+          </select>
+        </div>
+        <div class="f"><label>Título *</label><input id="tnt" placeholder="Ex: Cortar 50 peças polo"></div>
+        <div class="f"><label>Setor *</label><select id="tns"><option value="corte">Corte</option><option value="personalizacao">Personalização</option><option value="artes">Artes</option><option value="costura">Costura</option><option value="revisao">Revisão/Expedição</option></select></div>
       </div>
       <div class="row r3">
         <div class="f"><label>Prioridade (1=alta)</label><input type="number" id="tnp" value="1" min="1" max="10"></div>
@@ -960,7 +974,48 @@ async function editTar(id){
 }
 async function concTar(id,titulo){
   if(!confirm('Concluir: '+titulo))return;
+  // Buscar dados da tarefa para saber a OP e etapa atual
+  var {data:tarDet}=await DB.from('tarefas').select('op_num,setor').eq('id',id).single();
+  // Marcar como concluída
   await DB.from('tarefas').update({status:'concluida',concluida_por:U.nome,concluida_em:new Date().toISOString()}).eq('id',id);
+  // Se tem OP vinculada, perguntar próxima etapa
+  if(tarDet?.op_num){
+    var {data:opAtual}=await DB.from('ops').select('etapa,num,cliente').eq('num',tarDet.op_num).single();
+    if(opAtual){
+      var etIdx=ETAPAS.indexOf(opAtual.etapa);
+      var proxOpts=ETAPAS.slice(etIdx+1); // etapas disponíveis após a atual
+      if(proxOpts.length>0&&opAtual.etapa!=='Concluída'){
+        // Montar select das próximas etapas
+        var optsHtml=proxOpts.map(e=>`<option value="${e}">${e}</option>`).join('');
+        openM(`<b style="font-size:14px;color:var(--g)">Encaminhar OP ${opAtual.num}</b>
+          <p style="font-size:12px;color:var(--m);margin:8px 0 14px">Tarefa concluída. Para qual etapa esta OP vai agora?</p>
+          <div class="f" style="margin-bottom:14px"><label>Próxima etapa</label>
+            <select id="prox-et">${optsHtml}</select>
+          </div>
+          <div class="frow">
+            <button class="btn bs" onclick="closeM()">Só concluir</button>
+            <button class="btn ba" id="btn-encaminhar">Encaminhar e criar tarefa</button>
+          </div>`);
+        g('btn-encaminhar').onclick=async()=>{
+          var novaEtapa=g('prox-et').value;
+          // Atualizar etapa da OP
+          await DB.from('ops').update({etapa:novaEtapa}).eq('num',opAtual.num);
+          // Criar tarefa automática para o setor da próxima etapa
+          var novoSetor=ETAPA_SETOR[novaEtapa]||'corte';
+          await DB.from('tarefas').insert({
+            op_num:opAtual.num,
+            titulo:`${novaEtapa} — OP ${opAtual.num} (${opAtual.cliente})`,
+            descricao:`Tarefa criada automaticamente ao avançar de ${opAtual.etapa} para ${novaEtapa}.`,
+            setor:novoSetor,prioridade:2,
+            data_agendada:hoje(),status:'pendente',criado_por:U.nome
+          });
+          closeM();
+          alert(`OP ${opAtual.num} encaminhada para ${novaEtapa}. Tarefa criada para o setor de ${novoSetor}.`);
+          pgTar();return;
+        };
+      }
+    }
+  }
   var w=window.open('','_blank','width=380,height:420');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Comprovante</title><style>body{font-family:system-ui,sans-serif;padding:22px;max-width:340px;margin:0 auto;font-size:13px}.logo{background:#1a4a1f;color:#fff;padding:7px 12px;border-radius:5px;font-weight:800;display:inline-block;margin-bottom:14px}h2{color:#1a4a1f;margin-bottom:12px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee}.lbl{color:#888}.val{font-weight:700}@media print{button{display:none}}</style></head><body>
     <div class="logo">NorteSul Uniformes</div><h2>Comprovante de Conclusão</h2>
@@ -1033,7 +1088,7 @@ async function editUsr(id){
 }
 
 // init
-window.onload=()=>{if(loadS()){rst();g('ls').style.display='none';g('sys').style.display='block';buildNav();go('op');}else g('le').focus();};
+window.onload=()=>{if(loadS()){rst();g('ls').style.display='none';g('sys').style.display='block';buildNav();go(U.nivel==='operacional'?'tar':'op');}else g('le').focus();};
 </script>
 </body>
 </html>
