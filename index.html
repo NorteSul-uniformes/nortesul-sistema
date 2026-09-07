@@ -155,7 +155,7 @@ function go(p,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
   (btn||g('nav').querySelector(`[data-p="${p}"]`))?.classList.add('on');
   g('mc').innerHTML=ld();
-  ({op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,usr:pgUsr}[p]||pgOP)();
+  ({op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,avs:pgAvs,usr:pgUsr,aud:pgAud}[p]||pgOP)();
 }
 
 // login/logout
@@ -1098,6 +1098,7 @@ async function _pgTarHistorico(mc){
 }
 
 async function pgAvs(){
+  var mc=g('mc');mc.innerHTML=ld();
   var {data:avs}=await DB.from('avisos').select('*').order('criado_em',{ascending:false});avs=avs||[];
   var mc=g('mc');mc.innerHTML='';
   var hdr=document.createElement('div');hdr.innerHTML='<b style="font-size:15px;color:var(--g)">Quadro de Avisos</b>';mc.appendChild(hdr);
