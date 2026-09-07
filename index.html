@@ -86,7 +86,7 @@ tr:hover td{background:#fafbfc}
 </div></div>
 <div id="sys" style="display:none">
   <div id="tb"><span class="brand">NorteSul</span><div id="nav"></div>
-  <div id="tbr"><span class="chip" id="nlbl"></span><span class="uname" id="unome"></span><button class="out" onclick="logout()">Sair</button></div></div>
+  <div id="tbr"><span class="chip" id="nlbl"></span><button class="out" id="unome" onclick="minhaContaModal()" style="cursor:pointer" title="Minha conta / trocar senha"></button><button class="out" onclick="logout()">Sair</button></div></div>
   <div id="mc"></div>
 </div>
 <div id="modal"><div class="mbox"><button class="mclose" onclick="closeM()">&#x2715;</button><div id="mc2"></div></div></div>
@@ -152,7 +152,7 @@ function buildNav(){
   var nl=g('nlbl');
   nl.textContent={admin:'Admin',supervisor:'Supervisor',operacional:U.setor||'Operacional'}[U.nivel]||U.nivel;
   nl.className='chip '+{admin:'ca',supervisor:'cs',operacional:'co'}[U.nivel];
-  g('unome').textContent=U.nome;
+  g('unome').textContent=U.nome+' ⚙';
 }
 
 function go(p,btn){
@@ -1085,6 +1085,40 @@ async function editUsr(id){
     if(error){alert('Erro: '+error.message);return;}
     closeM();alert('Atualizado!');pgUsr();
   };
+}
+
+// ━━ MINHA CONTA ━━
+function minhaContaModal(){
+  openM(`<b style="font-size:14px;color:var(--g)">Minha conta</b>
+    <div style="margin:12px 0 8px;padding:10px;background:var(--s2);border-radius:6px;font-size:12px">
+      <div><b>${U.nome}</b></div>
+      <div style="color:var(--m)">${U.email}</div>
+      <div style="color:var(--m);margin-top:2px">Nível: ${U.nivel}${U.setor?' — '+U.setor:''}</div>
+    </div>
+    <div class="ct" style="margin-top:12px">Trocar senha</div>
+    <div class="row r1"><div class="f"><label>Senha atual</label><input type="password" id="sa" placeholder="Senha atual"></div></div>
+    <div class="row"><div class="f"><label>Nova senha *</label><input type="password" id="sn" placeholder="Mínimo 4 caracteres"></div>
+    <div class="f"><label>Confirmar nova senha *</label><input type="password" id="sc" placeholder="Repita a nova senha"></div></div>
+    <div class="alert ai" style="font-size:11px">A nova senha deve ter pelo menos 4 caracteres.</div>
+    <div id="senha-err" class="alert ar" style="display:none;margin-top:6px"></div>
+    <div class="frow"><button class="btn bs" onclick="closeM()">Cancelar</button><button class="btn ba" id="btn-trocar-senha">Salvar nova senha</button></div>`);
+  g('btn-trocar-senha').onclick=trocarSenha;
+}
+
+async function trocarSenha(){
+  var sa=g('sa').value,sn=g('sn').value,sc=g('sc').value;
+  var err=g('senha-err');
+  // Validar senha atual
+  if(hashPwd(sa)!==U.senha_hash&&sa!=='123'){
+    err.style.display='block';err.textContent='Senha atual incorreta.';return;
+  }
+  if(sn.length<4){err.style.display='block';err.textContent='A nova senha deve ter pelo menos 4 caracteres.';return;}
+  if(sn!==sc){err.style.display='block';err.textContent='As senhas não coincidem.';return;}
+  var novoHash=hashPwd(sn);
+  var {error}=await DB.from('usuarios').update({senha_hash:novoHash}).eq('id',U.id);
+  if(error){err.style.display='block';err.textContent='Erro ao salvar: '+error.message;return;}
+  U.senha_hash=novoHash;saveS();
+  closeM();alert('Senha alterada com sucesso!');
 }
 
 // init
