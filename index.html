@@ -128,7 +128,7 @@ async function au(a,t,r,d){try{await DB.from('auditoria').insert({usuario_id:U.i
 
 // nav
 const MENUS={
-  admin:[['op','Nova OP'],['cad','Cadastro'],['est','Estoque'],['fin','Financeiro'],['exp','Expedição'],['tar','Tarefas'],['avs','Avisos'],['usr','Usuários']],
+  admin:[['op','Nova OP'],['cad','Cadastro'],['est','Estoque'],['fin','Financeiro'],['exp','Expedição'],['tar','Tarefas'],['avs','Avisos'],['usr','Usuários'],['aud','Auditoria']],
   supervisor:[['op','Nova OP'],['cad','Cadastro'],['est','Estoque'],['fin','Financeiro'],['exp','Expedição'],['tar','Tarefas'],['avs','Avisos']],
   operacional:[['tar','Tarefas']]
 };
@@ -165,7 +165,7 @@ function go(p,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
   (btn||g('nav').querySelector(`[data-p="${p}"]`))?.classList.add('on');
   g('mc').innerHTML=ld();
-  var fn={op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,avs:pgAvs,usr:pgUsr}[p];(fn||pgOP)();
+  var fn={op:pgOP,cad:pgCad,est:pgEst,fin:pgFin,exp:pgExp,tar:pgTar,avs:pgAvs,usr:pgUsr,aud:pgAud}[p];(fn||pgOP)();
 }
 
 // login/logout
@@ -1241,6 +1241,98 @@ async function pgAvs(){
     bdl.onclick=async()=>{if(!confirm('Excluir aviso?'))return;await DB.from('avisos').delete().eq('id',a.id);pgAvs();};
     btns.appendChild(bst);btns.appendChild(bdl);div.appendChild(btns);cont.appendChild(div);
   });
+}
+
+// ━━ AUDITORIA ━━
+async function pgAud(){
+  var mc=g('mc');mc.innerHTML='';
+
+  // Cabeçalho com filtros
+  var hdr=document.createElement('div');
+  hdr.innerHTML=`<b style="font-size:15px;color:var(--g)">Auditoria</b>`;
+  mc.appendChild(hdr);
+
+  var filtros=document.createElement('div');filtros.className='card';filtros.style.marginTop='10px';
+  filtros.innerHTML=`<div class="ct">Filtrar registros</div>
+    <div class="row r3">
+      <div class="f"><label>Usuário</label><input id="af-usr" placeholder="Nome do usuário"></div>
+      <div class="f"><label>Ação</label>
+        <select id="af-acao">
+          <option value="">Todas</option>
+          <option>LOGIN</option>
+          <option>LOGOUT</option>
+          <option>CRIOU_OP</option>
+          <option>EDITOU_OP</option>
+          <option>EXCLUIU_OP</option>
+          <option>RETIRADA</option>
+          <option>CRIOU_TAREFA</option>
+          <option>CONCLUIU_TAREFA</option>
+          <option>LANCOU_CAIXA</option>
+          <option>LANCOU_VENDA</option>
+          <option>ENTRADA_ESTOQUE</option>
+          <option>CRIOU_CLIENTE</option>
+          <option>CRIOU_PRODUTO</option>
+        </select>
+      </div>
+      <div class="f"><label>De</label><input type="date" id="af-de" value="${new Date(Date.now()-7*864e5).toISOString().slice(0,10)}"></div>
+      <div class="f"><label>Até</label><input type="date" id="af-ate" value="${hoje()}"></div>
+    </div>
+    <div class="frow"><button class="btn ba" id="btn-af-buscar">Buscar</button></div>`;
+  mc.appendChild(filtros);
+
+  var resultado=document.createElement('div');resultado.id='aud-resultado';mc.appendChild(resultado);
+
+  var acaoCls={
+    LOGIN:'bok',LOGOUT:'bgy',CRIOU_OP:'bbl',EDITOU_OP:'bwn',EXCLUIU_OP:'bred',
+    RETIRADA:'bok',CRIOU_TAREFA:'bbl',CONCLUIU_TAREFA:'bok',
+    LANCOU_CAIXA:'bbl',LANCOU_VENDA:'bok',ENTRADA_ESTOQUE:'bwn',
+    CRIOU_CLIENTE:'bbl',CRIOU_PRODUTO:'bbl',RESET_SENHA:'bwn'
+  };
+
+  async function buscarAud(){
+    resultado.innerHTML=ld();
+    var q=DB.from('auditoria').select('*').order('criado_em',{ascending:false}).limit(300);
+    var usr=v('af-usr').trim(),acao=v('af-acao'),de=v('af-de'),ate=v('af-ate');
+    if(acao)q=q.eq('acao',acao);
+    if(de)q=q.gte('criado_em',de+'T00:00:00');
+    if(ate)q=q.lte('criado_em',ate+'T23:59:59');
+    var {data:logs}=await q;logs=logs||[];
+
+    // Filtro de usuário client-side (ilike não disponível no anon)
+    if(usr)logs=logs.filter(l=>(l.usuario_nome||'').toLowerCase().includes(usr.toLowerCase()));
+
+    if(!logs.length){resultado.innerHTML='<div class="card" style="color:var(--m);font-size:12px;text-align:center;padding:20px">Nenhum registro encontrado.</div>';return;}
+
+    var card=document.createElement('div');card.className='card';card.style.padding='0';
+    card.innerHTML=`<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g);display:flex;justify-content:space-between;align-items:center">
+      <span>Registros (${logs.length})</span>
+      <small style="font-weight:400;color:var(--m)">Nenhum log pode ser apagado</small>
+    </div>
+    <div class="tw"><table><thead><tr>
+      <th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Tabela</th><th>Registro</th><th>Detalhe</th>
+    </tr></thead><tbody id="aud-rows"></tbody></table></div>`;
+    resultado.innerHTML='';resultado.appendChild(card);
+
+    var tbody=card.querySelector('#aud-rows');
+    logs.forEach(l=>{
+      var tr=document.createElement('tr');
+      var dt=new Date(l.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+      var det='';
+      if(l.detalhe&&typeof l.detalhe==='object'){
+        det=Object.entries(l.detalhe).filter(([,v])=>v!==null&&v!==undefined&&v!=='').map(([k,v])=>`<span style="color:var(--m)">${k}:</span> ${v}`).join(' · ');
+      }
+      tr.innerHTML=`<td style="white-space:nowrap;font-size:11px">${dt}</td>
+        <td style="font-weight:700">${l.usuario_nome||'--'}</td>
+        <td><span class="badge ${acaoCls[l.acao]||'bgy'}" style="font-size:9px">${l.acao||'--'}</span></td>
+        <td style="font-size:11px;color:var(--m)">${l.tabela||'--'}</td>
+        <td style="font-size:11px"><b>${l.registro_id||'--'}</b></td>
+        <td style="font-size:11px;color:var(--m);max-width:220px">${det||'--'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  filtros.querySelector('#btn-af-buscar').onclick=buscarAud;
+  buscarAud();
 }
 
 // ━━ MINHA CONTA ━━
