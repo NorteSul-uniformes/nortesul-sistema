@@ -884,13 +884,96 @@ async function pgExp(){
 }
 
 // ━━ TAREFAS ━━
-async function pgTar(){
+async function _pgTarHistorico(mc){
+  // Filtros
+  var filtros=document.createElement('div');filtros.className='card';
+  filtros.innerHTML=`<div class="ct">Filtrar histórico</div>
+    <div class="row r3">
+      <div class="f"><label>Setor</label>
+        <select id="hf-setor">
+          <option value="">Todos os setores</option>
+          <option value="corte">Corte</option>
+          <option value="personalizacao">Personalização</option>
+          <option value="artes">Artes</option>
+          <option value="costura">Costura</option>
+          <option value="revisao">Revisão/Expedição</option>
+        </select>
+      </div>
+      <div class="f"><label>De</label><input type="date" id="hf-de" value="${new Date(Date.now()-30*864e5).toISOString().slice(0,10)}"></div>
+      <div class="f"><label>Até</label><input type="date" id="hf-ate" value="${hoje()}"></div>
+    </div>
+    <div class="frow"><button class="btn ba" id="btn-hf-buscar">Buscar</button></div>`;
+  mc.appendChild(filtros);
+
+  var resultado=document.createElement('div');resultado.id='hist-resultado';mc.appendChild(resultado);
+
+  async function buscarHist(){
+    resultado.innerHTML=ld();
+    var q=DB.from('tarefas').select('*').eq('status','concluida').order('concluida_em',{ascending:false}).limit(200);
+    var setor=v('hf-setor'),de=v('hf-de'),ate=v('hf-ate');
+    if(setor)q=q.eq('setor',setor);
+    if(de)q=q.gte('concluida_em',de+'T00:00:00');
+    if(ate)q=q.lte('concluida_em',ate+'T23:59:59');
+    var {data:hist}=await q;hist=hist||[];
+
+    if(!hist.length){resultado.innerHTML='<div class="card" style="color:var(--m);font-size:12px;text-align:center;padding:20px">Nenhuma tarefa concluída no período.</div>';return;}
+
+    var card=document.createElement('div');card.className='card';card.style.padding='0';
+    card.innerHTML=`<div style="padding:8px 12px;border-bottom:1px solid var(--b);font-size:12px;font-weight:700;color:var(--g);display:flex;justify-content:space-between">
+      <span>Tarefas concluídas (${hist.length})</span>
+    </div>
+    <div class="tw"><table><thead><tr>
+      <th>Concluída em</th><th>Título</th><th>OP</th><th>Setor</th>
+      <th>Concluída por</th><th>Observação</th><th>Criada por</th>
+    </tr></thead><tbody id="hist-rows"></tbody></table></div>`;
+    resultado.innerHTML='';resultado.appendChild(card);
+
+    var tbody=card.querySelector('#hist-rows');
+    var setorCls={corte:'bbl',personalizacao:'bwn',artes:'bpu',costura:'bnv',revisao:'bgy'};
+    hist.forEach(t=>{
+      var tr=document.createElement('tr');
+      var dt=t.concluida_em?new Date(t.concluida_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'--';
+      tr.innerHTML=`<td style="white-space:nowrap;font-size:11px">${dt}</td>
+        <td><b>${t.titulo}</b></td>
+        <td>${t.op_num?`<span class="badge bnv">${t.op_num}</span>`:'--'}</td>
+        <td><span class="badge ${setorCls[t.setor]||'bgy'}">${t.setor}</span></td>
+        <td>${t.concluida_por||'--'}</td>
+        <td style="font-size:11px;color:var(--m);max-width:200px">${t.obs_conclusao||'--'}</td>
+        <td style="font-size:11px;color:var(--m)">${t.criado_por||'--'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  filtros.querySelector('#btn-hf-buscar').onclick=buscarHist;
+  buscarHist(); // carregar com filtros padrão
+}
+
+async function pgTar(sub){
   var isOp=U.nivel==='operacional';
+  if(!isOp)sub=sub||'ativas'; else sub='ativas';
+  var mc=g('mc');mc.innerHTML='';
+
+  // Abas para admin/supervisor
+  if(!isOp){
+    var hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:12px';
+    hdr.innerHTML=`<b style="font-size:15px;color:var(--g)">Tarefas</b>`;
+    [['ativas','Ativas'],['historico','Histórico']].forEach(([k,l])=>{
+      var b=document.createElement('button');
+      b.className='btn sm '+(k===sub?'bp':'bs');b.textContent=l;
+      b.onclick=()=>pgTar(k);hdr.appendChild(b);
+    });
+    mc.appendChild(hdr);
+    if(sub==='historico'){await _pgTarHistorico(mc);return;}
+  }
+
   var q=DB.from('tarefas').select('*').order('prioridade');
   if(isOp)q=q.eq('setor',U.setor);
   var {data:tar}=await q;tar=tar||[];
-  var pend=tar.filter(t=>t.status!=='concluida'),conc=tar.filter(t=>t.status==='concluida');
-  var mc=g('mc');mc.innerHTML='';
+  var pend=tar.filter(t=>t.status!=='concluida');
+  // Operacional: concluídas somem após 7 dias
+  var _7d=new Date(Date.now()-7*24*60*60*1000).toISOString();
+  var conc=tar.filter(t=>t.status==='concluida'&&(!isOp||(t.concluida_em&&t.concluida_em>_7d)));
 
   if(!isOp){
     var card=document.createElement('div');card.className='card';
