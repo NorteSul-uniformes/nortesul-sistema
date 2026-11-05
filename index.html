@@ -283,27 +283,33 @@ async function pgOP(){
   });
 }
 
+function renumProds(){
+  document.querySelectorAll('.pcard').forEach(function(card,ix){
+    var ci=card.id.slice(2);
+    var sel=g('pm'+ci);
+    var nome=(sel&&sel.value)?sel.options[sel.selectedIndex].dataset.n:'';
+    var t=g('pt'+ci);
+    if(t)t.textContent='Produto '+(ix+1)+(nome?' — '+nome:'');
+  });
+}
 function addProd(prods){
   _pc++;var i=_pc;
   var pOpts=prods.map(function(p){return '<option value="'+p.id+'" data-n="'+p.nome+'" data-v="'+(p.valor_venda||0)+'">'+p.nome+'</option>';}).join('');
   var szInf=['1A','2-3A','4-5A','6-7A','8-9A','10-11A'];
   var szAdu=['PP','P','MP','M','G','GG','XGG','EX'];
   var div=document.createElement('div');div.className='pcard';div.id='pc'+i;
-  var szInfH=szInf.map(function(s){return '<div class="si"><div class="slbl">'+s+'</div><input class="sinp" type="number" min="0" value="0" data-sz="i'+i+'-'+s+'" oninput="totPcs()"></div>';}).join('');
-  var szMAH=szAdu.map(function(s){return '<div class="si"><div class="slbl">'+s+'</div><input class="sinp" type="number" min="0" value="0" data-sz="m'+i+'-'+s+'" oninput="totPcs()"></div>';}).join('');
-  var szFAH=szAdu.map(function(s){return '<div class="si"><div class="slbl">'+s+'</div><input class="sinp" type="number" min="0" value="0" data-sz="f'+i+'-'+s+'" oninput="totPcs()"></div>';}).join('');
-  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b style="font-size:13px;color:var(--g)">Produto '+i+'</b><button class="btn br2 sm" id="rem'+i+'">Remover</button></div>'+
+  function grade(pfx,arr){return arr.map(function(s){return '<div class="si"><div class="slbl">'+s+'</div><input class="sinp" type="number" min="0" value="0" data-sz="'+pfx+i+'-'+s+'" oninput="totPcs()"></div>';}).join('');}
+  div.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b id="pt'+i+'" style="font-size:14px;color:var(--g)">Produto</b><button class="btn br2 sm" id="rem'+i+'">Remover</button></div>'+
     '<div class="row" style="margin-bottom:10px"><div class="f"><label>Modelo *</label><select id="pm'+i+'"><option value="">Selecione...</option>'+pOpts+'</select></div>'+
     '<div class="f"><label>Observação do produto</label><input id="po'+i+'" placeholder="Ex: Manga longa, personalização nas costas..."></div></div>'+
-    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">INFANTIL</div>'+
-    '<div class="sg inf" style="margin-bottom:8px">'+szInfH+'</div>'+
-    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">ADULTO MASCULINO</div>'+
-    '<div class="sg adu" style="margin-bottom:8px">'+szMAH+'</div>'+
-    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">ADULTO FEMININO</div>'+
-    '<div class="sg adu" style="margin-bottom:8px">'+szFAH+'</div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">INFANTIL</div><div class="sg inf" style="margin-bottom:8px">'+grade('i',szInf)+'</div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">ADULTO MASCULINO</div><div class="sg adu" style="margin-bottom:8px">'+grade('m',szAdu)+'</div>'+
+    '<div style="font-size:10px;font-weight:700;color:var(--m);margin-bottom:4px">ADULTO FEMININO</div><div class="sg adu" style="margin-bottom:8px">'+grade('f',szAdu)+'</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid var(--b)"><span style="font-size:11px;font-weight:700;color:var(--m)">TOTAL DESTE PRODUTO</span><span style="font-size:18px;font-weight:900;color:var(--g)" id="ptot'+i+'">0</span></div>';
-  div.querySelector('#rem'+i).onclick=function(){div.remove();totPcs();};
+  div.querySelector('#rem'+i).onclick=function(){div.remove();totPcs();renumProds();};
+  div.querySelector('#pm'+i).onchange=renumProds;
   g('plist').appendChild(div);
+  renumProds();
 }
 
 function totPcs(){
@@ -326,8 +332,13 @@ function getProds(){
     var ci=card.id.slice(2);
     var sel=g('pm'+ci);if(!sel||!sel.value)return;
     var opt=sel.options[sel.selectedIndex];
-    var sz={};var tot=0;
-    card.querySelectorAll('.sinp').forEach(function(inp){var q=parseInt(inp.value)||0;if(q>0){sz[inp.dataset.sz]=q;tot+=q;}});
+    var sz={inf:{},masc:{},fem:{}};var tot=0;
+    var mapa={i:'inf',m:'masc',f:'fem'};
+    card.querySelectorAll('.sinp').forEach(function(inp){
+      var q=parseInt(inp.value)||0;if(q<=0)return;
+      var m=/^([imf])\d+-(.+)$/.exec(inp.dataset.sz||'');if(!m)return;
+      sz[mapa[m[1]]][m[2]]=q;tot+=q;
+    });
     arr.push({produto_id:sel.value,nome:opt.dataset.n||opt.text,valor_venda:parseFloat(opt.dataset.v||0),quantidade:tot,sizes:sz,obs:v('po'+ci)});
   });return arr;
 }
@@ -412,7 +423,24 @@ async function printOP(id){
     var cols=keys.map(k=>(sz[k]||0)>0?`<td style="padding:4px 8px;border:1px solid #ccc;text-align:center"><div style="font-size:9px;color:#888">${k.replace(/^[mf]/,'')}</div><b>${sz[k]}</b></td>`:'').join('');
     return cols?`<tr><td style="padding:4px 8px;border:1px solid #ccc;background:#f5f5f5;font-weight:700">${lbl}</td>${cols}</tr>`:'';
   }).join('');
-  var prods=(op.produtos||[]).map(p=>`<div style="padding:5px 0;border-bottom:1px solid #eee"><b>${p.nome}</b>${p.quantidade?' — '+p.quantidade+' pcs':''}${p.obs?' ('+p.obs+')':''}</div>`).join('');
+  var SZG=[['Infantil','inf',['1A','2-3A','4-5A','6-7A','8-9A','10-11A']],['Adulto masculino','masc',['PP','P','MP','M','G','GG','XGG','EX']],['Adulto feminino','fem',['PP','P','MP','M','G','GG','XGG','EX']]];
+  var tdS='padding:4px 9px;border:1px solid #ccc;text-align:center';
+  var temEstr=false;
+  var prods=(op.produtos||[]).map(function(p,ix){
+    var s=p.sizes||{};
+    if(s.inf||s.masc||s.fem)temEstr=true;
+    var rows=SZG.map(function(gr){
+      var o=s[gr[1]]||{};
+      var cols=gr[2].filter(function(t){return (o[t]||0)>0;}).map(function(t){return '<td style="'+tdS+'"><div style="font-size:9px;color:#888">'+t+'</div><b style="font-size:14px">'+o[t]+'</b></td>';}).join('');
+      return cols?'<tr><td style="'+tdS+';background:#f5f5f5;font-weight:700;text-align:left">'+gr[0]+'</td>'+cols+'</tr>':'';
+    }).join('');
+    return '<div style="margin-bottom:12px;padding:9px 10px;border:1px solid #ddd;border-radius:4px">'+
+      '<div style="display:flex;justify-content:space-between;font-weight:800;color:#1a4a1f;font-size:14px;margin-bottom:6px"><span>Produto '+(ix+1)+' — '+p.nome+'</span><span>'+(p.quantidade||0)+' peças</span></div>'+
+      (p.obs?'<div style="font-size:11px;color:#555;margin-bottom:6px">Obs: '+p.obs+'</div>':'')+
+      (rows?'<table style="border-collapse:collapse">'+rows+'</table>':'<span style="color:#888;font-size:11px">Sem tamanhos informados</span>')+
+    '</div>';
+  }).join('');
+  var legacy=(!temEstr&&szRows)?'<table style="border-collapse:collapse;margin-bottom:12px">'+szRows+'</table>':'';
   var etList=['Corte','Personalização','Silk','Costura','Revisão'];
   var etIdx=['Corte','Personalização','Silk','Costura','Revisão','Concluída'].indexOf(op.etapa||'Corte');
   var etH=etList.map((e,i)=>{
@@ -431,8 +459,7 @@ async function printOP(id){
     <div class="row"><div class="col"><div class="lbl">Cliente</div><b>${op.cliente}</b></div><div class="col"><div class="lbl">Faccionista</div>${op.faccionista_nome||'--'}</div><div class="col"><div class="lbl">Personalização</div>${op.personalizacao}</div></div>
     <div class="row"><div class="col"><div class="lbl">Tecido</div>${op.tecido||'--'}</div><div class="col"><div class="lbl">Cor</div>${op.cor||'--'}</div><div class="col"><div class="lbl">Gola</div>${op.gola||'--'}</div></div>
     ${op.obs?`<div class="row"><div class="col"><div class="lbl">Obs</div>${op.obs}</div></div>`:''}
-    <h2>Produtos</h2>${prods||'<span style="color:#888">Nenhum produto</span>'}
-    <h2>Tamanhos — Total: ${op.total_pecas} peças</h2><table style="border-collapse:collapse;margin-bottom:12px">${szRows}</table>
+    <h2>Produtos e tamanhos — Total: ${op.total_pecas} peças</h2>${prods||'<span style="color:#888">Nenhum produto</span>'}${legacy}
     <h2>Fluxo</h2><div style="display:flex;margin-bottom:16px">${etH}</div>
     <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:11px;color:#888"><b style="color:#1a1d23">Assinaturas:</b><br><br>
     <div style="display:flex;gap:30px;margin-top:6px"><div>Corte: ___________________________ Data: _______</div><div>Personalização: ___________________________ Data: _______</div></div>
