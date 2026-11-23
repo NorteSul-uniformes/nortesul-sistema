@@ -72,6 +72,7 @@ tr:hover td{background:#fafbfc}
 .frow{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
 .sep{font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
 .kb{display:grid;grid-template-columns:repeat(6,minmax(210px,1fr));gap:10px;overflow-x:auto;align-items:start;padding-bottom:8px}
+.kbmv{font-size:11px;padding:3px 4px;max-width:125px}
 .kbc{background:var(--s2);border:1px solid var(--b);border-radius:8px;min-width:0}
 .kbt{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-top:4px solid var(--g);border-radius:8px 8px 0 0;font-size:12px;font-weight:800;color:var(--g);background:var(--s)}
 .kbl{padding:8px;max-height:72vh;overflow-y:auto}
@@ -176,7 +177,7 @@ function _tick(){var n=new Date(),el=g('relo');if(el)el.textContent=n.toLocaleDa
 function go(p,btn){
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
   (btn||g('nav').querySelector(`[data-p="${p}"]`))?.classList.add('on');
-  g('mc').innerHTML=ld();
+  g('mc').innerHTML=ld();_pgAtual=p;
   ({op:pgOP,kb:pgKb,cad:pgCad,exp:pgExp,tar:pgTar,avs:pgAvs,usr:pgUsr,aud:pgAud}[p]||pgOP)();
 }
 
@@ -405,7 +406,63 @@ async function pgExp(){
 }
 
 // ━━ TAREFAS ━━
+// ━━ PRIORIDADE / SETOR / SINCRONIZAÇÃO OP ↔ TAREFAS ━━
+var PRIO={max:{n:1,l:'Máxima',cor:'var(--r)',d:'precisa ser feita hoje'},mod:{n:3,l:'Moderada',cor:'var(--w)',d:'pode ser reorganizada'},min:{n:6,l:'Mínima',cor:'var(--ok)',d:'pode ficar por último'}};
+function prioK(n){n=parseInt(n);if(isNaN(n))n=3;return n<=2?'max':n<=5?'mod':'min';}
+function prioBadge(n){var p=PRIO[prioK(n)];return '<span style="display:inline-block;padding:2px 9px;border-radius:12px;background:'+p.cor+';color:#fff;font-size:10px;font-weight:800;white-space:nowrap">'+p.l+'</span>';}
+function prioSel(id,cur){var k=prioK(cur);return '<select id="'+id+'">'+['max','mod','min'].map(function(x){return '<option value="'+PRIO[x].n+'"'+(x===k?' selected':'')+'>'+PRIO[x].l+' — '+PRIO[x].d+'</option>';}).join('')+'</select>';}
+function cmpTar(a,b){
+  var pa=prioK(a.prioridade),pb=prioK(b.prioridade),o={max:0,mod:1,min:2};
+  if(pa!==pb)return o[pa]-o[pb];
+  var da=a.data_agendada||'9999',db=b.data_agendada||'9999';
+  return da<db?-1:da>db?1:0;
+}
+function normSet(x){return String(x==null?'':x).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z]/g,'').replace(/^expedicao$/,'revisao');}
+var SETOR_ETAPA={corte:'Corte',designer:'Designer',personalizacao:'Personalização',costura:'Costura',revisao:'Revisão'};
+var SETORES=[['corte','Corte'],['designer','Designer'],['personalizacao','Personalização'],['costura','Costura'],['revisao','Revisão/Expedição']];
+
+async function _sincTar(num,cliente,etAnt,etNova,criar){
+  var sa=etAnt?ETAPA_SETOR[etAnt]:null,sn=ETAPA_SETOR[etNova]||null,erro=null;
+  if(sa&&sa!==sn){
+    var rc=await DB.from('tarefas').update({status:'concluida',concluida_por:U.nome,concluida_em:new Date().toISOString(),obs_conclusao:'Etapa da OP alterada de '+etAnt+' para '+etNova+' por '+U.nome}).eq('op_num',num).eq('setor',sa).neq('status','concluida');
+    if(rc.error)erro=rc.error.message;
+  }
+  if(criar&&sn){
+    var re=await DB.from('tarefas').select('id').eq('op_num',num).eq('setor',sn).neq('status','concluida');
+    if(!re.error&&!(re.data&&re.data.length)){
+      var ri=await DB.from('tarefas').insert({op_num:num,titulo:etNova+' — OP '+num+' ('+cliente+')',descricao:(etAnt?'Etapa alterada de '+etAnt+' para '+etNova+' por '+U.nome+'.':'OP criada por '+U.nome+'.'),setor:sn,prioridade:3,data_agendada:hoje(),status:'pendente',criado_por:U.nome});
+      if(ri.error)erro=ri.error.message;
+    }
+  }
+  return erro;
+}
+async function moverOP(num,cliente,etAnt,etNova,criar){
+  var r=await DB.from('ops').update({etapa:etNova}).eq('num',num).select('id');
+  if(r.error||!r.data||!r.data.length){alert('A OP '+num+' NÃO mudou de etapa: '+(r.error?r.error.message:'o banco não permitiu a alteração (permissão do seu usuário).'));return false;}
+  await au('MOVEU_OP','ops',num,{cliente:cliente,de:etAnt,para:etNova});
+  var er=await _sincTar(num,cliente,etAnt,etNova,criar);
+  if(er)alert('A OP mudou de etapa, mas as tarefas não foram atualizadas por completo: '+er);
+  return true;
+}
+async function kbRefresh(){
+  if(!g('kb-board'))return;
+  var r=await DB.from('ops').select('id,num,cliente,entrega,etapa,personalizacao,faccionista_nome,total_pecas,retirado,data_retirada,produtos,criada_em').order('criada_em',{ascending:false});
+  if(r.error||!g('kb-board'))return;
+  _kbOps=r.data||[];kbDesenhar();
+}
+var _pgAtual='';
+setInterval(function(){
+  try{
+    if(!U||document.hidden||g('sys').style.display==='none'||g('modal').style.display==='block')return;
+    var ae=document.activeElement;
+    if(ae&&(/^(INPUT|TEXTAREA)$/.test(ae.tagName)||(ae.tagName==='SELECT'&&ae.className!=='kbmv')))return;
+    if(_pgAtual==='kb')kbRefresh();
+    else if(_pgAtual==='tar'&&window._tarSub==='ativas'&&!v('tnt'))pgTar();
+  }catch(e){}
+},30000);
+
 async function pgTar(sub){
+  window._tarSub=sub||'ativas';
   var isOp=U.nivel==='operacional';
   if(!isOp){sub=sub||'ativas';var mc2=g('mc');mc2.innerHTML='';
     var hdr=document.createElement('div');hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:12px';
@@ -415,8 +472,9 @@ async function pgTar(sub){
   }
   var isOp=U.nivel==='operacional';
   var q=DB.from('tarefas').select('*').order('prioridade');
-  if(isOp)q=q.eq('setor',U.setor);
   var {data:tar}=await q;tar=tar||[];
+  if(isOp)tar=tar.filter(function(t){return normSet(t.setor)===normSet(U.setor);});
+  tar.sort(cmpTar);
   var pend=tar.filter(t=>t.status!=='concluida');
   var _7d=new Date(Date.now()-7*24*60*60*1000).toISOString();
   var conc=tar.filter(t=>t.status==='concluida'&&(!isOp||(t.concluida_em&&t.concluida_em>_7d)));
@@ -433,7 +491,7 @@ async function pgTar(sub){
         <div class="f"><label>Setor *</label><select id="tns"><option value="corte">Corte</option><option value="designer">Designer</option><option value="personalizacao">Personalização</option><option value="costura">Costura</option><option value="revisao">Revisão/Expedição</option></select></div>
       </div>
       <div class="row r3">
-        <div class="f"><label>Prioridade (1=alta)</label><input type="number" id="tnp" value="1" min="1" max="10"></div>
+        <div class="f"><label>Prioridade</label>${prioSel('tnp',3)}</div>
         <div class="f"><label>Data agendada</label><input type="date" id="tnd" value="${hoje()}"></div>
         <div class="f"><label>Descrição</label><input id="tnds"></div>
       </div>
@@ -458,7 +516,7 @@ async function pgTar(sub){
       pend.forEach(t=>{
         var co=t.prioridade<=2?'var(--r)':t.prioridade<=5?'var(--w)':'var(--ok)';
         var tr=document.createElement('tr');
-        tr.innerHTML=`<td><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:${co};color:#fff;align-items:center;justify-content:center;font-size:10px;font-weight:800">${t.prioridade}</span></td><td>${t.op_num||'--'}</td><td>${t.titulo}</td><td><span class="badge ${t.setor==='costura'?'bpu':'bgy'}">${t.setor}</span></td><td>${dBR(t.data_agendada)}</td><td><span class="badge ${t.status==='em_andamento'?'bwn':'bgy'}">${t.status}</span></td><td></td>`;
+        tr.innerHTML=`<td>${prioBadge(t.prioridade)}</td><td>${t.op_num||'--'}</td><td>${t.titulo}</td><td><span class="badge ${t.setor==='costura'?'bpu':'bgy'}">${t.setor}</span></td><td>${dBR(t.data_agendada)}</td><td><span class="badge ${t.status==='em_andamento'?'bwn':'bgy'}">${t.status}</span></td><td></td>`;
         var td=tr.lastElementChild;
         var bcn=document.createElement('button');bcn.className='btn bg2 sm';bcn.textContent=t.setor==='costura'?'Concluir e enviar':'Concluir';bcn.onclick=function(){concTar(t.id,t.titulo);};td.appendChild(bcn);td.appendChild(document.createTextNode(' '));
         var be=document.createElement('button');be.className='btn bs sm';be.textContent='Editar';be.onclick=()=>editTar(t.id);td.appendChild(be);
@@ -474,7 +532,7 @@ async function pgTar(sub){
       var co=t.prioridade<=2?'var(--r)':t.prioridade<=5?'var(--w)':'var(--ok)';
       var div=document.createElement('div');
       div.style.cssText=`background:var(--s);border:2px solid ${co};border-radius:7px;padding:13px;margin:8px 0;display:flex;align-items:flex-start;gap:11px`;
-      div.innerHTML=`<span style="display:inline-flex;width:30px;height:30px;border-radius:50%;background:${co};color:#fff;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0">${t.prioridade}</span>
+      div.innerHTML=`${prioBadge(t.prioridade)}
         <div style="flex:1"><b style="font-size:13px">${t.titulo}</b>${t.op_num?`<div style="font-size:11px;color:var(--m)">OP: ${t.op_num}</div>`:''}${t.descricao?`<div style="font-size:12px;color:var(--m)">${t.descricao}</div>`:''}${t.data_agendada?`<div style="font-size:11px;color:var(--m)">${dBR(t.data_agendada)}</div>`:''}</div>`;
       var bc=document.createElement('button');bc.className='btn bg2 sm';bc.textContent='Concluir';bc.onclick=()=>concTar(t.id,t.titulo);div.appendChild(bc);mc.appendChild(div);
     });
@@ -489,8 +547,15 @@ async function pgTar(sub){
 }
 async function criarTar(){
   var t=v('tnt').trim();if(!t){alert('Informe o título.');return;}
-  await DB.from('tarefas').insert({op_num:v('tnop')||null,titulo:t,descricao:v('tnds'),setor:v('tns'),prioridade:iv('tnp')||1,data_agendada:v('tnd')||null,status:'pendente',criado_por:U.nome});
-  alert('Tarefa criada!');pgTar();
+  var opn=v('tnop'),setor=v('tns'),ne=SETOR_ETAPA[setor],mover=null;
+  if(opn&&ne){
+    var ro=await DB.from('ops').select('num,cliente,etapa').eq('num',opn).single();var op=ro.data;
+    if(op&&op.etapa!=='Concluída'&&ETAPA_SETOR[op.etapa]!==setor&&confirm('Esta tarefa é do setor '+ne+', mas a OP '+op.num+' está em '+op.etapa+'.\n\nMover a OP para "'+ne+'" no quadro de OP\'s em aberto?'))mover=op;
+  }
+  var ri=await DB.from('tarefas').insert({op_num:opn||null,titulo:t,descricao:v('tnds'),setor:setor,prioridade:iv('tnp')||3,data_agendada:v('tnd')||null,status:'pendente',criado_por:U.nome}).select('id');
+  if(ri.error||!ri.data||!ri.data.length){alert('A tarefa NÃO foi criada: '+(ri.error?ri.error.message:'o banco não permitiu (permissão do seu usuário).'));return;}
+  if(mover)await moverOP(mover.num,mover.cliente,mover.etapa,ne,false);
+  alert('Tarefa criada!'+(mover?' A OP '+mover.num+' foi para '+ne+'.':''));pgTar();
 }
 async function editTar(id){
   _mid=id;
@@ -501,14 +566,15 @@ async function editTar(id){
       <div class="f"><label>Setor</label><select id="ets">${['corte','designer','personalizacao','artes','costura','revisao'].map(s=>`<option${t.setor===s?' selected':''}>${s}</option>`).join('')}</select></div>
     </div>
     <div class="row r3">
-      <div class="f"><label>Prioridade</label><input type="number" id="etp" value="${t.prioridade||1}" min="1" max="10"></div>
+      <div class="f"><label>Prioridade</label>${prioSel('etp',t.prioridade)}</div>
       <div class="f"><label>Data</label><input type="date" id="etd" value="${t.data_agendada||''}"></div>
       <div class="f"><label>Status</label><select id="etst"><option value="pendente"${t.status==='pendente'?' selected':''}>Pendente</option><option value="em_andamento"${t.status==='em_andamento'?' selected':''}>Em andamento</option><option value="concluida"${t.status==='concluida'?' selected':''}>Concluída</option></select></div>
     </div>
     <div class="row r1"><div class="f"><label>Descrição</label><input id="etds" value="${t.descricao||''}"></div></div>
     <div class="frow"><button class="btn bs" onclick="closeM()">Cancelar</button><button class="btn ba" id="btn-star">Salvar</button></div>`);
   g('btn-star').onclick=async()=>{
-    await DB.from('tarefas').update({titulo:v('ett'),setor:v('ets'),prioridade:iv('etp')||1,data_agendada:v('etd')||null,descricao:v('etds'),status:v('etst')}).eq('id',_mid);
+    var ru=await DB.from('tarefas').update({titulo:v('ett'),setor:v('ets'),prioridade:iv('etp')||3,data_agendada:v('etd')||null,descricao:v('etds'),status:v('etst')}).eq('id',_mid).select('id');
+    if(ru.error||!ru.data||!ru.data.length){alert('Não consegui salvar: '+(ru.error?ru.error.message:'permissão negada.'));return;}
     closeM();alert('Atualizado!');pgTar();
   };
 }
@@ -536,7 +602,7 @@ async function concTar(id,titulo){
           var ro=await DB.from('ops').update({etapa:ne}).eq('num',opAt.num).select('id');
           if(ro.error||!ro.data||!ro.data.length){closeM();alert('A OP NÃO mudou de etapa: '+(ro.error?ro.error.message:'o banco não permitiu a alteração (permissão do seu usuário).')+' A tarefa foi concluída, mas a OP continua em '+opAt.etapa+'.');pgTar();return;}
           var ns=ETAPA_SETOR[ne]||null;
-          if(ns){var ri=await DB.from('tarefas').insert({op_num:opAt.num,titulo:ne+' — OP '+opAt.num+' ('+opAt.cliente+')',descricao:'Avançada de '+opAt.etapa+' para '+ne+'.',setor:ns,prioridade:2,data_agendada:hoje(),status:'pendente',criado_por:U.nome});
+          if(ns){var ri=await DB.from('tarefas').insert({op_num:opAt.num,titulo:ne+' — OP '+opAt.num+' ('+opAt.cliente+')',descricao:'Avançada de '+opAt.etapa+' para '+ne+'.',setor:ns,prioridade:3,data_agendada:hoje(),status:'pendente',criado_por:U.nome});
             if(ri.error){alert('A OP mudou de etapa, mas a tarefa da próxima etapa NÃO foi criada: '+ri.error.message);}}
           closeM();alert('OP '+opAt.num+' encaminhada para '+ne+'.'+(ns?'':' Ela aparece na Expedição para retirada.'));_compTar(titulo,obsConc,tarDet&&tarDet.setor);pgTar();
         };return;
@@ -585,7 +651,7 @@ async function editUsr(id){
     '<div class="row" style="margin-top:12px"><div class="f"><label>Nome</label><input id="eun" value="'+esc(u.nome)+'"></div>'+
     '<div class="f"><label>Email (alterar só no Supabase)</label><input id="eue" value="'+esc(u.email)+'" disabled></div></div>'+
     '<div class="row r3"><div class="f"><label>Nível</label><select id="eul"><option value="admin"'+(u.nivel==='admin'?' selected':'')+'>Admin</option><option value="supervisor"'+(u.nivel==='supervisor'?' selected':'')+'>Supervisor</option><option value="operacional"'+(u.nivel==='operacional'?' selected':'')+'>Operacional</option></select></div>'+
-    '<div class="f"><label>Setor</label><input id="eus" value="'+esc(u.setor||'')+'" placeholder="corte, designer, personalizacao, costura, revisao"></div>'+
+    '<div class="f"><label>Setor</label><select id="eus"><option value="">(nenhum)</option>'+SETORES.map(function(x){return '<option value="'+x[0]+'"'+(normSet(u.setor)===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+(u.setor&&!SETORES.some(function(x){return x[0]===normSet(u.setor);})?'<option value="'+esc(u.setor)+'" selected>'+esc(u.setor)+'</option>':'')+'</select></div>'+
     '<div class="f"><label>Ativo</label><select id="eua"><option value="true"'+(u.ativo?' selected':'')+'>Sim</option><option value="false"'+(!u.ativo?' selected':'')+'>Não</option></select></div></div>'+
     '<div class="frow"><button class="btn bs" onclick="closeM()">Cancelar</button><button class="btn ba" id="btn-susr">Salvar</button></div>');
   g('btn-susr').onclick=async function(){
@@ -905,10 +971,16 @@ async function salvarOP(){
   if(res.error){alert('Erro: '+res.error.message);return;}
   if(op){
     await au('EDITOU_OP','ops',op.num,{cliente:cli,campos:alt.join(', ')||'nenhum'});
-    alert('OP '+op.num+' atualizada!');go('kb');
+    var msgT='';
+    if(dados.etapa!==op.etapa){
+      var e1=await _sincTar(op.num,cli,op.etapa,dados.etapa,true);
+      msgT=e1?' Atenção: as tarefas não foram atualizadas ('+e1+').':' Tarefas dos setores atualizadas.';
+    }
+    alert('OP '+op.num+' atualizada!'+msgT);go('kb');
   }else{
     await au('CRIOU_OP','ops',dados.num,{cliente:cli,total_pecas:tot});
-    alert('OP '+dados.num+' criada!');pgOP();
+    var e2=await _sincTar(dados.num,cli,null,'Corte',true);
+    alert('OP '+dados.num+' criada!'+(e2?' Atenção: a tarefa do Corte NÃO foi criada ('+e2+').':' A tarefa do Corte já foi enviada ao setor.'));pgOP();
   }
 }
 
@@ -1007,6 +1079,14 @@ function kbCard(o,hojeS){
   var bp=document.createElement('button');bp.className='btn bs sm';bp.textContent='PDF';
   bp.onclick=function(){printOP(o.id);};
   bar.appendChild(be);bar.appendChild(bp);
+  var mv=document.createElement('select');mv.className='kbmv';
+  mv.innerHTML='<option value="">Mover para…</option>'+ETAPAS.filter(function(e){return e!==o.etapa;}).map(function(e){return '<option>'+e+'</option>';}).join('');
+  mv.onchange=async function(){
+    var ne=this.value;if(!ne)return;
+    if(!confirm('Mover a '+o.num+' de '+o.etapa+' para '+ne+'?\nAs tarefas dos setores serão atualizadas.')){this.value='';return;}
+    if(await moverOP(o.num,o.cliente,o.etapa,ne,true))await kbRefresh();else this.value='';
+  };
+  bar.appendChild(mv);
   return d;
 }
 
