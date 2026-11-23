@@ -71,7 +71,7 @@ tr:hover td{background:#fafbfc}
 .val2{font-size:20px;font-weight:800;line-height:1}
 .frow{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
 .sep{font-size:11px;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
-.kb{display:grid;grid-template-columns:repeat(5,minmax(230px,1fr));gap:10px;overflow-x:auto;align-items:start;padding-bottom:8px}
+.kb{display:grid;grid-template-columns:repeat(6,minmax(210px,1fr));gap:10px;overflow-x:auto;align-items:start;padding-bottom:8px}
 .kbc{background:var(--s2);border:1px solid var(--b);border-radius:8px;min-width:0}
 .kbt{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-top:4px solid var(--g);border-radius:8px 8px 0 0;font-size:12px;font-weight:800;color:var(--g);background:var(--s)}
 .kbl{padding:8px;max-height:72vh;overflow-y:auto}
@@ -152,8 +152,8 @@ const MENUS={
   supervisor:[['op','Nova OP'],['kb',"OP's em aberto"],['cad','Cadastro'],['exp','Expedição'],['tar','Tarefas'],['avs','Avisos']],
   operacional:[['tar','Tarefas']]
 };
-const ETAPA_SETOR={'Corte':'corte','Personalização':'personalizacao','Silk':'personalizacao','Costura':'costura','Revisão':'revisao','Expedição':'revisao'};
-const ETAPAS=['Corte','Personalização','Silk','Costura','Revisão','Concluída'];
+const ETAPA_SETOR={'Corte':'corte','Designer':'designer','Personalização':'personalizacao','Silk':'personalizacao','Costura':'costura','Revisão':'revisao','Expedição':'revisao'};
+const ETAPAS=['Corte','Designer','Personalização','Silk','Costura','Revisão','Concluída'];
 
 function buildNav(){
   var m=MENUS[U.nivel]||MENUS.operacional;
@@ -273,8 +273,8 @@ async function printOP(id){
     '</div>';
   }).join('');
   var legacy=(!temEstr&&szRows)?'<table style="border-collapse:collapse;margin-bottom:12px">'+szRows+'</table>':'';
-  var etList=['Corte','Personalização','Silk','Costura','Revisão'];
-  var etIdx=['Corte','Personalização','Silk','Costura','Revisão','Concluída'].indexOf(op.etapa||'Corte');
+  var etList=['Corte','Designer','Personalização','Silk','Costura','Revisão'];
+  var etIdx=['Corte','Designer','Personalização','Silk','Costura','Revisão','Concluída'].indexOf(op.etapa||'Corte');
   var etH=etList.map((e,i)=>{
     var done=i<etIdx,act=i===etIdx;
     var bg=act?'#1a4a1f':done?'#eaf4ee':'#f9f9f9';
@@ -294,7 +294,8 @@ async function printOP(id){
     <h2>Produtos e tamanhos — Total: ${op.total_pecas} peças</h2>${prods||'<span style="color:#888">Nenhum produto</span>'}${legacy}
     <h2>Fluxo</h2><div style="display:flex;margin-bottom:16px">${etH}</div>
     <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:11px;color:#888"><b style="color:#1a1d23">Assinaturas:</b><br><br>
-    <div style="display:flex;gap:30px;margin-top:6px"><div>Corte: ___________________________ Data: _______</div><div>Personalização: ___________________________ Data: _______</div></div>
+    <div style="display:flex;gap:30px;margin-top:6px"><div>Corte: ___________________________ Data: _______</div><div>Designer: ___________________________ Data: _______</div></div>
+    <div style="display:flex;gap:30px;margin-top:10px"><div>Personalização: ___________________________ Data: _______</div></div>
     <div style="display:flex;gap:30px;margin-top:10px"><div>Costura: ___________________________ Data: _______</div><div>Revisão: ___________________________ Data: _______</div></div></div>
     <div style="text-align:center;margin-top:14px"><button onclick="window.print()" style="background:#1a4a1f;color:#fff;border:none;padding:9px 22px;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer">Imprimir / PDF</button></div>
     </body></html>`);
@@ -427,7 +428,7 @@ async function pgTar(sub){
       <div class="row r3">
         <div class="f"><label>OP vinculada</label><select id="tnop"><option value="">Sem OP</option>${opOptsTar}</select></div>
         <div class="f"><label>Título *</label><input id="tnt"></div>
-        <div class="f"><label>Setor *</label><select id="tns"><option value="corte">Corte</option><option value="personalizacao">Personalização</option><option value="artes">Artes</option><option value="costura">Costura</option><option value="revisao">Revisão/Expedição</option></select></div>
+        <div class="f"><label>Setor *</label><select id="tns"><option value="corte">Corte</option><option value="designer">Designer</option><option value="personalizacao">Personalização</option><option value="costura">Costura</option><option value="revisao">Revisão/Expedição</option></select></div>
       </div>
       <div class="row r3">
         <div class="f"><label>Prioridade (1=alta)</label><input type="number" id="tnp" value="1" min="1" max="10"></div>
@@ -495,7 +496,7 @@ async function editTar(id){
   openM(`<b style="font-size:14px;color:var(--g)">Editar tarefa</b>
     <div class="row" style="margin-top:12px">
       <div class="f"><label>Título</label><input id="ett" value="${t.titulo}"></div>
-      <div class="f"><label>Setor</label><select id="ets">${['corte','personalizacao','artes','costura','revisao'].map(s=>`<option${t.setor===s?' selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="f"><label>Setor</label><select id="ets">${['corte','designer','personalizacao','artes','costura','revisao'].map(s=>`<option${t.setor===s?' selected':''}>${s}</option>`).join('')}</select></div>
     </div>
     <div class="row r3">
       <div class="f"><label>Prioridade</label><input type="number" id="etp" value="${t.prioridade||1}" min="1" max="10"></div>
@@ -582,7 +583,7 @@ async function editUsr(id){
     '<div class="row" style="margin-top:12px"><div class="f"><label>Nome</label><input id="eun" value="'+esc(u.nome)+'"></div>'+
     '<div class="f"><label>Email (alterar só no Supabase)</label><input id="eue" value="'+esc(u.email)+'" disabled></div></div>'+
     '<div class="row r3"><div class="f"><label>Nível</label><select id="eul"><option value="admin"'+(u.nivel==='admin'?' selected':'')+'>Admin</option><option value="supervisor"'+(u.nivel==='supervisor'?' selected':'')+'>Supervisor</option><option value="operacional"'+(u.nivel==='operacional'?' selected':'')+'>Operacional</option></select></div>'+
-    '<div class="f"><label>Setor</label><input id="eus" value="'+esc(u.setor||'')+'" placeholder="corte, personalizacao, costura, revisao"></div>'+
+    '<div class="f"><label>Setor</label><input id="eus" value="'+esc(u.setor||'')+'" placeholder="corte, designer, personalizacao, costura, revisao"></div>'+
     '<div class="f"><label>Ativo</label><select id="eua"><option value="true"'+(u.ativo?' selected':'')+'>Sim</option><option value="false"'+(!u.ativo?' selected':'')+'>Não</option></select></div></div>'+
     '<div class="frow"><button class="btn bs" onclick="closeM()">Cancelar</button><button class="btn ba" id="btn-susr">Salvar</button></div>');
   g('btn-susr').onclick=async function(){
@@ -912,6 +913,7 @@ async function salvarOP(){
 // ━━ OP's EM ABERTO (KANBAN) ━━
 var KB=[
   {t:'Corte',et:['Corte'],cor:'#1a4a8a'},
+  {t:'Designer',et:['Designer'],cor:'#b0306a'},
   {t:'Personalização',et:['Personalização','Silk'],cor:'#8a5a00'},
   {t:'Costura',et:['Costura'],cor:'#6b3fa0'},
   {t:'Revisão',et:['Revisão'],cor:'#555555'},
