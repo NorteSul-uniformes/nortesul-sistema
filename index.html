@@ -518,7 +518,8 @@ async function concTar(id,titulo){
   });
   if(obsConc===null)return;
   var {data:tarDet}=await DB.from('tarefas').select('op_num,setor').eq('id',id).single();
-  await DB.from('tarefas').update({status:'concluida',concluida_por:U.nome,concluida_em:new Date().toISOString(),obs_conclusao:obsConc||null}).eq('id',id);
+  var rt=await DB.from('tarefas').update({status:'concluida',concluida_por:U.nome,concluida_em:new Date().toISOString(),obs_conclusao:obsConc||null}).eq('id',id).select('id');
+  if(rt.error||!rt.data||!rt.data.length){alert('Não consegui concluir a tarefa: '+(rt.error?rt.error.message:'o banco não permitiu a alteração (permissão do seu usuário).'));return;}
   if(tarDet&&tarDet.op_num){
     var {data:opAt}=await DB.from('ops').select('etapa,num,cliente').eq('num',tarDet.op_num).single();
     if(opAt&&opAt.etapa!=='Concluída'){
@@ -529,9 +530,11 @@ async function concTar(id,titulo){
         g('btn-sc').onclick=function(){closeM();_compTar(titulo,obsConc,tarDet&&tarDet.setor);pgTar();};
         g('btn-enc').onclick=async function(){
           var ne=v('prox-et');
-          await DB.from('ops').update({etapa:ne}).eq('num',opAt.num);
+          var ro=await DB.from('ops').update({etapa:ne}).eq('num',opAt.num).select('id');
+          if(ro.error||!ro.data||!ro.data.length){closeM();alert('A OP NÃO mudou de etapa: '+(ro.error?ro.error.message:'o banco não permitiu a alteração (permissão do seu usuário).')+' A tarefa foi concluída, mas a OP continua em '+opAt.etapa+'.');pgTar();return;}
           var ns=ETAPA_SETOR[ne]||null;
-          if(ns)await DB.from('tarefas').insert({op_num:opAt.num,titulo:ne+' — OP '+opAt.num+' ('+opAt.cliente+')',descricao:'Avançada de '+opAt.etapa+' para '+ne+'.',setor:ns,prioridade:2,data_agendada:hoje(),status:'pendente',criado_por:U.nome});
+          if(ns){var ri=await DB.from('tarefas').insert({op_num:opAt.num,titulo:ne+' — OP '+opAt.num+' ('+opAt.cliente+')',descricao:'Avançada de '+opAt.etapa+' para '+ne+'.',setor:ns,prioridade:2,data_agendada:hoje(),status:'pendente',criado_por:U.nome});
+            if(ri.error){alert('A OP mudou de etapa, mas a tarefa da próxima etapa NÃO foi criada: '+ri.error.message);}}
           closeM();alert('OP '+opAt.num+' encaminhada para '+ne+'.'+(ns?'':' Ela aparece na Expedição para retirada.'));_compTar(titulo,obsConc,tarDet&&tarDet.setor);pgTar();
         };return;
       }
