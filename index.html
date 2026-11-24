@@ -124,7 +124,7 @@ const v=id=>(g(id)||{}).value||'';
 const fv=id=>parseFloat(v(id))||0;
 const iv=id=>parseInt(v(id))||0;
 function ld(){return '<div style="text-align:center;padding:30px;color:var(--m)">Carregando...</div>';}
-function closeM(){g('modal').style.display='none';}
+function closeM(){g('modal').style.display='none';var x=document.querySelector('#modal .mclose');if(x)x.style.display='';}
 function openM(h){g('mc2').innerHTML=h;g('modal').style.display='block';}
 // session (login real: Supabase Auth; o perfil vem da tabela perfis)
 const SK='ns_t',TTL=20*60*1e3;
@@ -426,6 +426,31 @@ function normSet(x){return String(x==null?'':x).normalize('NFD').replace(/[̀-ͯ
 var SETOR_ETAPA={corte:'Corte',designer:'Designer',personalizacao:'Personalização',costura:'Costura',revisao:'Revisão'};
 var SETORES=[['corte','Corte'],['designer','Designer'],['personalizacao','Personalização'],['costura','Costura'],['revisao','Revisão/Expedição']];
 
+async function _liberar(num){try{await DB.from('ops').update({liberada:true}).eq('num',num).eq('liberada',false);}catch(e){}}
+function tarefaObrigatoria(num,cliente){
+  var hj=hoje();
+  openM('<b style="font-size:14px;color:var(--g)">OP '+esc(num)+' criada — falta a tarefa</b>'+
+    '<div class="alert" style="margin:10px 0;background:var(--bw,#fff4d6);color:var(--w,#8a5a00);border:1px solid var(--w,#c98a00)"><b>Passo obrigatório:</b> a OP só aparece para os setores (Tarefas e quadro de OP\'s em aberto) depois que a primeira tarefa for criada. Escolha o setor que inicia a produção.</div>'+
+    '<div class="row"><div class="f"><label>Setor que começa *</label><select id="tfs">'+SETORES.map(function(x){return '<option value="'+x[0]+'">'+x[1]+'</option>';}).join('')+'</select></div>'+
+    '<div class="f"><label>Título *</label><input id="tft" value="'+esc('Corte — OP '+num+' ('+cliente+')')+'"></div></div>'+
+    '<div class="row r3"><div class="f"><label>Prioridade</label>'+prioSel('tfp',3)+'</div><div class="f"><label>Data</label><input type="date" id="tfd" value="'+hj+'"></div><div class="f"><label>Descrição</label><input id="tfds"></div></div>'+
+    '<div id="tf-err" class="alert ar" style="display:none"></div>'+
+    '<div class="frow"><button class="btn ba" id="btn-tf-ok">Criar tarefa e liberar OP</button></div>');
+  var x=document.querySelector('#modal .mclose');if(x)x.style.display='none';
+  g('tfs').onchange=function(){var et=SETOR_ETAPA[this.value];if(et)g('tft').value=et+' — OP '+num+' ('+cliente+')';};
+  g('btn-tf-ok').onclick=async function(){
+    var er=g('tf-err'),t=v('tft').trim();
+    if(!t){er.style.display='block';er.textContent='Informe o título.';return;}
+    var st=v('tfs');
+    var ri=await DB.from('tarefas').insert({op_num:num,titulo:t,descricao:v('tfds'),setor:st,prioridade:iv('tfp')||3,data_agendada:v('tfd')||null,status:'pendente',criado_por:U.nome}).select('id');
+    if(ri.error||!ri.data||!ri.data.length){er.style.display='block';er.textContent='A tarefa NÃO foi criada: '+(ri.error?ri.error.message:'permissão negada.');return;}
+    var ro=await DB.from('ops').update({liberada:true,etapa:SETOR_ETAPA[st]||'Corte'}).eq('num',num).select('id');
+    if(ro.error||!ro.data||!ro.data.length){er.style.display='block';er.textContent='A tarefa foi criada, mas a OP não foi liberada: '+(ro.error?ro.error.message:'permissão negada.');return;}
+    await au('LIBEROU_OP','ops',num,{setor:st,tarefa:t});
+    closeM();alert('Tarefa criada! A OP '+num+' já aparece para os setores.');
+    if(_pgAtual==='kb')kbRefresh();
+  };
+}
 async function _sincTar(num,cliente,etAnt,etNova,criar){
   var sa=etAnt?ETAPA_SETOR[etAnt]:null,sn=ETAPA_SETOR[etNova]||null,erro=null;
   if(sa&&sa!==sn){
@@ -436,7 +461,7 @@ async function _sincTar(num,cliente,etAnt,etNova,criar){
     var re=await DB.from('tarefas').select('id').eq('op_num',num).eq('setor',sn).neq('status','concluida');
     if(!re.error&&!(re.data&&re.data.length)){
       var ri=await DB.from('tarefas').insert({op_num:num,titulo:etNova+' — OP '+num+' ('+cliente+')',descricao:(etAnt?'Etapa alterada de '+etAnt+' para '+etNova+' por '+U.nome+'.':'OP criada por '+U.nome+'.'),setor:sn,prioridade:3,data_agendada:hoje(),status:'pendente',criado_por:U.nome});
-      if(ri.error)erro=ri.error.message;
+      if(ri.error)erro=ri.error.message;else await _liberar(num);
     }
   }
   return erro;
@@ -452,9 +477,9 @@ async function moverOP(num,cliente,etAnt,etNova,criar){
 }
 async function kbRefresh(){
   if(!g('kb-board'))return;
-  var r=await DB.from('ops').select('id,num,cliente,entrega,etapa,personalizacao,faccionista_nome,total_pecas,retirado,data_retirada,produtos,criada_em,imagem_path,imagem_nome').order('criada_em',{ascending:false});
+  var r=await DB.from('ops').select('id,num,cliente,entrega,etapa,personalizacao,faccionista_nome,total_pecas,retirado,data_retirada,produtos,criada_em,imagem_path,imagem_nome,liberada').order('criada_em',{ascending:false});
   if(r.error||!g('kb-board'))return;
-  _kbOps=r.data||[];kbDesenhar();
+  _kbOps=(r.data||[]).filter(function(o){return kbEdita()||o.liberada!==false;});kbDesenhar();
 }
 var _pgAtual='';
 setInterval(function(){
@@ -560,6 +585,7 @@ async function criarTar(){
   }
   var ri=await DB.from('tarefas').insert({op_num:opn||null,titulo:t,descricao:v('tnds'),setor:setor,prioridade:iv('tnp')||3,data_agendada:v('tnd')||null,status:'pendente',criado_por:U.nome}).select('id');
   if(ri.error||!ri.data||!ri.data.length){alert('A tarefa NÃO foi criada: '+(ri.error?ri.error.message:'o banco não permitiu (permissão do seu usuário).'));return;}
+  if(opn)await _liberar(opn);
   if(mover)await moverOP(mover.num,mover.cliente,mover.etapa,ne,false);
   alert('Tarefa criada!'+(mover?' A OP '+mover.num+' foi para '+ne+'.':''));pgTar();
 }
@@ -973,8 +999,8 @@ async function salvarOP(){
     if(!!op.retirado!==!!dados.retirado)alt.push('retirado');
     res=await DB.from('ops').update(dados).eq('id',op.id);
   }else{
-    dados.num=v('on');dados.vendedor=U.nome;dados.etapa='Corte';dados.obs_etapas={};dados.retirado=false;
-    res=await DB.from('ops').insert(dados);
+    dados.num=v('on');dados.vendedor=U.nome;dados.etapa='Corte';dados.obs_etapas={};dados.retirado=false;dados.liberada=false;
+    res=await DB.from('ops').insert(dados).select('id');
   }
   if(res.error){alert('Erro: '+res.error.message);return;}
   if(op){
@@ -987,8 +1013,8 @@ async function salvarOP(){
     alert('OP '+op.num+' atualizada!'+msgT);go('kb');
   }else{
     await au('CRIOU_OP','ops',dados.num,{cliente:cli,total_pecas:tot});
-    var e2=await _sincTar(dados.num,cli,null,'Corte',true);
-    alert('OP '+dados.num+' criada!'+(e2?' Atenção: a tarefa do Corte NÃO foi criada ('+e2+').':' A tarefa do Corte já foi enviada ao setor.'));pgOP();
+    await pgOP();
+    tarefaObrigatoria(dados.num,cli);
   }
 }
 
@@ -1005,11 +1031,11 @@ var _kbOps=[],_kbBusca='',_kbAntigas=false;
 
 async function pgKb(){
   var mc=g('mc');mc.innerHTML=ld();
-  var r=await DB.from('ops').select('id,num,cliente,entrega,etapa,personalizacao,faccionista_nome,total_pecas,retirado,data_retirada,produtos,criada_em,imagem_path,imagem_nome').order('criada_em',{ascending:false});
+  var r=await DB.from('ops').select('id,num,cliente,entrega,etapa,personalizacao,faccionista_nome,total_pecas,retirado,data_retirada,produtos,criada_em,imagem_path,imagem_nome,liberada').order('criada_em',{ascending:false});
   if(r.error){mc.innerHTML='<div class="alert ar">Erro ao carregar as OPs: '+esc(r.error.message)+'</div>';return;}
-  _kbOps=r.data||[];_kbBusca='';_kbAntigas=false;
+  _kbOps=(r.data||[]).filter(function(o){return kbEdita()||o.liberada!==false;});_kbBusca='';_kbAntigas=false;
   mc.innerHTML=`<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-      <div><b style="font-size:15px;color:var(--g)">OP's em aberto</b>${kbEdita()?'':'<span class="badge bgy" style="margin-left:8px">Somente visualização</span>'}<span id="kb-res" style="font-size:11px;color:var(--m);margin-left:8px"></span></div>
+      <div><b style="font-size:15px;color:var(--g)">OP's em aberto</b>${kbEdita()?'':'<span class="badge bgy" style="margin-left:8px">Somente visualização</span>'}<span id="kb-pend"></span><span id="kb-res" style="font-size:11px;color:var(--m);margin-left:8px"></span></div>
       <input id="kb-q" placeholder="Buscar por OP ou cliente..." style="max-width:260px">
     </div>
     <div id="kb-board"></div>`;
@@ -1018,6 +1044,8 @@ async function pgKb(){
 }
 
 function kbDesenhar(){
+  var np=_kbOps.filter(function(o){return o.liberada===false;}).length,pe=g('kb-pend');
+  if(pe)pe.innerHTML=(np&&kbEdita())?'<span class="badge bred" style="margin-left:8px">'+np+' OP(s) aguardando tarefa</span>':'';
   var hojeS=hoje(),lim=Date.now()-30*864e5,ultimo=KB.length-1;
   var cols=KB.map(function(c){return {def:c,items:[],ocultas:0};});
   var emProd=0;
@@ -1074,6 +1102,7 @@ function kbCard(o,hojeS){
       ?'<span class="badge bok">Entregue'+(o.data_retirada?' em '+new Date(o.data_retirada).toLocaleDateString('pt-BR'):'')+'</span>'
       :'<span class="badge bwn">Aguardando retirada</span>';
   }
+  if(o.liberada===false)rodape+='<span class="badge bred">Sem tarefa — não aparece para os setores</span>';
   d.innerHTML='<div class="kbh"><b>'+esc(o.num)+'</b><span class="badge '+(atrasada?'bred':'bgy')+'">'+(o.entrega?(atrasada?'Atrasada · ':'Entrega ')+dBR(o.entrega):'Sem data')+'</span></div>'+
     '<div class="kbcli">'+esc(o.cliente)+'</div>'+
     (prods?'<div class="kbp">'+prods+'</div>':'')+
@@ -1095,6 +1124,10 @@ function kbCard(o,hojeS){
     bi.textContent=o.imagem_path?(ed?'Imagem ✓':'Ver imagem'):'+ Imagem';
     bi.onclick=function(){imgModal(o.id);};
     bar.appendChild(bi);
+  }
+  if(ed&&o.liberada===false){
+    var bt=document.createElement('button');bt.className='btn ba sm';bt.textContent='Criar tarefa';
+    bt.onclick=function(){tarefaObrigatoria(o.num,o.cliente);};bar.appendChild(bt);
   }
   if(ed){
     var mv=document.createElement('select');mv.className='kbmv';
